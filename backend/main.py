@@ -7,8 +7,7 @@ from typing import Optional, Any
 import anthropic
 import os
 import json
-import psycopg2
-import psycopg2.extras
+import httpx
 from pathlib import Path
 
 app = FastAPI(title="Social AI API")
@@ -32,36 +31,35 @@ def root():
     return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
-# ── BAZA DANYCH ──────────────────────────────────────────────
-def get_conn():
-    db_url = os.environ.get("DATABASE_URL")
-    if not db_url:
-        raise HTTPException(status_code=500, detail="Brak zmiennej DATABASE_URL")
-    return psycopg2.connect(db_url)
+# ── SUPABASE CONFIG ──────────────────────────────────────────
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://gbjlacbtiisvzdtlsipw.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+
+def supa_headers():
+    return {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation"
+    }
 
 def init_db():
-    """Tworzy tabele jeśli nie istnieją."""
+    """Tworzy tabelę store przez Supabase REST API."""
+    # Supabase REST nie pozwala na CREATE TABLE – tabela musi być stworzona w SQL Editor
+    # Sprawdzamy tylko czy połączenie działa
     try:
-        db_url = os.environ.get("DATABASE_URL")
-        if not db_url:
-            return  # bez bazy nie crashujemy przy starcie
-        conn = psycopg2.connect(db_url)
-        cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS store (
-                key TEXT PRIMARY KEY,
-                value JSONB NOT NULL,
-                updated_at TIMESTAMPTZ DEFAULT NOW()
-            )
-        """)
-        conn.commit()
-        cur.close()
-        conn.close()
-        print("DB: tabele gotowe")
+        r = httpx.get(
+            f"{SUPABASE_URL}/rest/v1/store?limit=1",
+            headers=supa_headers(),
+            timeout=5
+        )
+        if r.status_code == 404 or (r.status_code == 400 and "does not exist" in r.text):
+            print("DB: tabela 'store' nie istnieje – stwórz ją w Supabase SQL Editor")
+        else:
+            print(f"DB: połączenie OK (status {r.status_code})")
     except Exception as e:
         print(f"DB init warning: {e}")
 
-# Inicjalizacja przy starcie
 init_db()
 
 
@@ -87,35 +85,32 @@ class StoreGetResponse(BaseModel):
 @app.get("/api/store/{key}", response_model=StoreGetResponse)
 def store_get(key: str):
     try:
-        conn = get_conn()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute("SELECT value FROM store WHERE key = %s", (key,))
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        if row is None:
+        r = httpx.get(
+            f"{SUPABASE_URL}/rest/v1/store?key=eq.{key}&select=value",
+            headers=supa_headers(),
+            timeout=5
+        )
+        if r.status_code != 200:
             return StoreGetResponse(key=key, value=None)
-        return StoreGetResponse(key=key, value=row["value"])
-    except HTTPException:
-        raise
+        rows = r.json()
+        if not rows:
+            return StoreGetResponse(key=key, value=None)
+        return StoreGetResponse(key=key, value=rows[0]["value"])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/store")
 def store_set(req: StoreSetRequest):
     try:
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO store (key, value, updated_at)
-            VALUES (%s, %s, NOW())
-            ON CONFLICT (key) DO UPDATE
-              SET value = EXCLUDED.value,
-                  updated_at = NOW()
-        """, (req.key, json.dumps(req.value)))
-        conn.commit()
-        cur.close()
-        conn.close()
+        payload = {"key": req.key, "value": req.value}
+        r = httpx.post(
+            f"{SUPABASE_URL}/rest/v1/store",
+            headers={**supa_headers(), "Prefer": "resolution=merge-duplicates,return=minimal"},
+            json=payload,
+            timeout=5
+        )
+        if r.status_code not in (200, 201, 204):
+            raise HTTPException(status_code=500, detail=r.text)
         return {"ok": True}
     except HTTPException:
         raise
@@ -143,9 +138,9 @@ def generate(req: GenerateRequest):
             }
         )
     except anthropic.AuthenticationError:
-        raise HTTPException(status_code=401, detail="Nieprawidłowy klucz API. Sprawdź zmienną ANTHROPIC_API_KEY.")
+        raise HTTPException(status_code=401, detail="Nieprawidłowy klucz API.")
     except anthropic.RateLimitError:
-        raise HTTPException(status_code=429, detail="Przekroczono limit zapytań. Poczekaj chwilę.")
+        raise HTTPException(status_code=429, detail="Przekroczono limit zapytań.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -155,11 +150,12 @@ def health():
     key = os.environ.get("ANTHROPIC_API_KEY", "")
     db_ok = False
     try:
-        db_url = os.environ.get("DATABASE_URL", "")
-        if db_url:
-            conn = psycopg2.connect(db_url)
-            conn.close()
-            db_ok = True
+        r = httpx.get(
+            f"{SUPABASE_URL}/rest/v1/store?limit=1",
+            headers=supa_headers(),
+            timeout=5
+        )
+        db_ok = r.status_code in (200, 206)
     except:
         pass
     return {
