@@ -302,9 +302,11 @@ textarea:focus{border-color:var(--accent)}
           <button class="fbt" onclick="togFbt(this,'kreatywny')">Kreatywny</button>
           <button class="fbt" onclick="togFbt(this,'za ogólny')">Za ogólny</button>
         </div>
-        <textarea id="fb-note" rows="2" placeholder="Notatka dla agenta..."></textarea>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:7px">
-          <button class="btn pr" onclick="saveFb()" id="fb-btn">Zapisz feedback</button>
+        <textarea id="fb-note" rows="2" placeholder="Notatka dla agenta – co poprawić, czego unikać..."></textarea>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap">
+          <button class="btn" onclick="saveFb()" id="fb-btn"><i class="ti ti-device-floppy"></i> Zapisz</button>
+          <button class="btn pr" onclick="saveFbAndImprove()" id="fb-improve-btn" title="Zapisz feedback i wygeneruj poprawioną wersję tego posta"><i class="ti ti-wand"></i> Zapisz i popraw post</button>
+          <button class="btn" onclick="saveFbAndRegen()" id="fb-regen-btn" style="background:var(--danger);color:#fff;border-color:var(--danger)" title="Słaby post – zapamiętaj i wygeneruj zupełnie nowy"><i class="ti ti-thumb-down"></i> Słaby – nowy post</button>
           <span id="fb-ok" style="font-size:12px;color:var(--accent);display:none"><i class="ti ti-check"></i> Zapisano</span>
         </div>
       </div>
@@ -313,10 +315,24 @@ textarea:focus{border-color:var(--accent)}
 
   <!-- UCZENIE -->
   <div id="v-learn" class="view">
+
+    <!-- PROFIL NAUKI -->
+    <div class="card" id="learn-profile-card">
+      <div class="card-title"><i class="ti ti-robot"></i> Profil nauki agenta – <span id="lp-brand-name">–</span></div>
+      <div id="learn-profile-content">
+        <div style="font-size:13px;color:var(--text-3);font-style:italic">Agent jeszcze nie zebrał wystarczająco feedbacków. Po 20 ocenach automatycznie wygeneruje profil nauki.</div>
+      </div>
+      <div style="margin-top:.75rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span id="lp-stats" style="font-size:12px;color:var(--text-3)"></span>
+        <button class="btn" id="lp-force-btn" onclick="forceAnalysis()" style="display:none"><i class="ti ti-refresh"></i> Odśwież analizę teraz</button>
+      </div>
+    </div>
+
+    <!-- GENEROWANIE POSTÓW DO OCENY -->
     <div class="card">
-      <div class="card-title"><i class="ti ti-brain"></i> Szybkie uczenie agenta</div>
+      <div class="card-title"><i class="ti ti-brain"></i> Szybkie uczenie – ocena postów</div>
       <div style="font-size:13px;color:var(--text-2);margin-bottom:.75rem;line-height:1.7">
-        Agent wygeneruje <strong>10 różnych postów</strong> w różnych stylach. Oceń każdy jako <strong style="color:var(--accent)">Dobry</strong> lub <strong style="color:var(--danger)">Do poprawy</strong> i opisz co zmienić. Agent zapamiętuje wszystkie oceny.
+        Agent wygeneruje <strong>10 różnych postów</strong> w różnych stylach. Oceń każdy jako <strong style="color:var(--accent)">Dobry</strong> lub <strong style="color:var(--danger)">Do poprawy</strong>. Po każdych <strong>20 ocenach</strong> agent automatycznie analizuje wzorce i aktualizuje swój profil nauki.
       </div>
       <div class="fg">
         <label>Temat / kontekst (opcjonalnie)</label>
@@ -417,7 +433,8 @@ const KB_CATS = [
   {id:'tone',label:'Ton głosu (ToV)',icon:'ti-message-dots'},
   {id:'audience',label:'Grupy docelowe',icon:'ti-users'},
   {id:'offer',label:'Oferta i USP',icon:'ti-list-check'},
-  {id:'keywords',label:'Słowa kluczowe',icon:'ti-hash'}
+  {id:'keywords',label:'Słowa kluczowe',icon:'ti-hash'},
+  {id:'style',label:'Mój styl (DNA)',icon:'ti-fingerprint'}
 ];
 const KB_FIELDS = {
   identity:[{k:'name',l:'Nazwa marki',t:'input'},{k:'tagline',l:'Tagline / slogan',t:'input'},{k:'mission',l:'Misja i opis (bazowy kontekst AI)',t:'ta',r:4}],
@@ -427,8 +444,8 @@ const KB_FIELDS = {
   keywords:[{k:'must',l:'Słowa must-use',t:'tags',c:'tg-b'},{k:'hashtags',l:'Hashtagi',t:'tags',c:'tg-g'},{k:'forbidden_words',l:'Słowa zakazane',t:'tags',c:'tg-r'}]
 };
 const KB_DEF = {
-  winter:{identity:{name:'Zimowa Akademia',tagline:'Mobilna skocznia narciarska dla każdego',mission:'Przybliżamy emocje sportów zimowych przez bezpieczne, mobilne skocznie narciarskie na eventach w całej Polsce.'},tone:{main:'Ekscytujący, rodzinny, bezpieczny, zimowy',examples:'Poczuj dreszczyk emocji! / Zimowa przygoda czeka!',forbidden:'Nie strasz trudnością, unikaj słowa "ryzyko"'},audience:{primary:'Gminy i samorządy organizujące eventy rodzinne',secondary:'Szkoły, organizatorzy eventów, rodzice z dziećmi 5-15 lat',geo:'Cała Polska, szczególnie małe i średnie miasta'},offer:{services:'Mobilna skocznia narciarska na wynajem\nPokazy narciarskie\nEdukacja sportów zimowych',usp:'Jedyna mobilna skocznia narciarska dostępna przez cały rok',pricing:'Wycena indywidualna, minimum 4h wynajmu'},keywords:{must:'zimowa, skocznia, śnieg, przygoda, rodzina, emocje',hashtags:'#ZimowaAkademia, #SkoczniaNarciarska, #SportDlaWszystkich, #FamilyFun',forbidden_words:'ryzyko, trudne, wyczynowe'}},
-  '3x3':{identity:{name:'3x3 Koszykówka',tagline:'Streetball na najwyższym poziomie',mission:'Organizujemy dynamiczne turnieje 3x3 łącząc lokalne społeczności przez sport uliczny.'},tone:{main:'Dynamiczny, młodzieżowy, hip-hopowy, streetwearowy',examples:'Jesteś gotowy?! / Real ballers show up',forbidden:'Unikaj korporacyjnego języka, nie pisz "zapraszamy uprzejmie"'},audience:{primary:'Młodzi koszykarze 16-30 lat',secondary:'Kibice streetballu, sponsorzy lokalni',geo:'Wisła, Kołobrzeg, Bielsko-Biała'},offer:{services:'Turnieje 3x3\nEventy streetball\nStrefa kibica z DJ',usp:'Jedyne turnieje 3x3 łączące sport z kulturą uliczną',pricing:'Wstęp wolny dla kibiców, opłata startowa dla drużyn'},keywords:{must:'3x3, streetball, turniej, ballers, rywalizacja',hashtags:'#3x3Basketball, #Streetball, #3x3Polska, #HoopLife',forbidden_words:'nudne, formalne, zapraszamy uprzejmie'}},
+  winter:{identity:{name:'Zimowa Akademia',tagline:'Mobilna skocznia narciarska dla każdego',mission:'Przybliżamy emocje sportów zimowych przez bezpieczne, mobilne skocznie narciarskie na eventach w całej Polsce.'},tone:{main:'Ekscytujący, rodzinny, bezpieczny, zimowy',examples:'Poczuj dreszczyk emocji! / Zimowa przygoda czeka!',forbidden:'Nie strasz trudnością, unikaj słowa "ryzyko"'},audience:{primary:'Gminy i samorządy organizujące eventy rodzinne',secondary:'Szkoły, organizatorzy eventów, rodzice z dziećmi 5-15 lat',geo:'Cała Polska, szczególnie małe i średnie miasta'},offer:{services:'Mobilna skocznia narciarska na wynajem\nPokazy narciarskie\nEdukacja sportów zimowych',usp:'Jedyna mobilna skocznia narciarska dostępna przez cały rok',pricing:'Wycena indywidualna, minimum 4h wynajmu'},keywords:{must:'zimowa, skocznia, śnieg, przygoda, rodzina, emocje',hashtags:'#ZimowaAkademia, #SkoczniaNarciarska, #SportDlaWszystkich, #FamilyFun',forbidden_words:'ryzyko, trudne, wyczynowe'},styleExamples:[]},
+  '3x3':{identity:{name:'3x3 Koszykówka',tagline:'Streetball na najwyższym poziomie',mission:'Organizujemy dynamiczne turnieje 3x3 łącząc lokalne społeczności przez sport uliczny.'},tone:{main:'Dynamiczny, młodzieżowy, hip-hopowy, streetwearowy',examples:'Jesteś gotowy?! / Real ballers show up',forbidden:'Unikaj korporacyjnego języka, nie pisz "zapraszamy uprzejmie"'},audience:{primary:'Młodzi koszykarze 16-30 lat',secondary:'Kibice streetballu, sponsorzy lokalni',geo:'Wisła, Kołobrzeg, Bielsko-Biała'},offer:{services:'Turnieje 3x3\nEventy streetball\nStrefa kibica z DJ',usp:'Jedyne turnieje 3x3 łączące sport z kulturą uliczną',pricing:'Wstęp wolny dla kibiców, opłata startowa dla drużyn'},keywords:{must:'3x3, streetball, turniej, ballers, rywalizacja',hashtags:'#3x3Basketball, #Streetball, #3x3Polska, #HoopLife',forbidden_words:'nudne, formalne, zapraszamy uprzejmie'},styleExamples:[]},
   bdb:{identity:{name:'bdb event',tagline:'Tworzymy z pasją',mission:'Agencja eventowa z Cieszyna tworząca kompleksowe doświadczenia sportowe dla samorządów i firm.'},tone:{main:'Profesjonalny, kreatywny, biznesowy, case-study',examples:'Zrealizowaliśmy ponad 50 eventów / Kompleksowa obsługa od A do Z',forbidden:'Unikaj pustych frazesów, zawsze podawaj liczby'},audience:{primary:'Samorządy i gminy szukające organizatorów eventów',secondary:'Sponsorzy korporacyjni, marki sportowe',geo:'Ogólnopolski zasięg, headquarter w Cieszynie'},offer:{services:'Organizacja imprez sportowych (Plaża Open, Beskidzka Plaża)\nWynajem sprzętu eventowego\nObsługa i zabezpieczenie imprez\nTransport eventowy\nProdukcja odzieży eventowej',usp:'Jedyna agencja łącząca eventy z własną produkcją odzieży i logistyką',pricing:'Oferty B2B, wycena projektowa'},keywords:{must:'pasja, profesjonalizm, skala, B2B, event, case study',hashtags:'#bdbEvent, #TwórzymyZPasją, #EventMarketing, #Cieszyn',forbidden_words:'najtańsi, rewolucyjni, najlepsi bez uzasadnienia'}}
 };
 
@@ -456,17 +473,18 @@ async function serverSet(key, value){
 }
 
 let DATA = {
-  events:      lsGet('sa5_events',[]),
-  feedbacks:   lsGet('sa5_feedbacks',[]),
-  postHistory: lsGet('sa5_history',[]),
-  inbox:       lsGet('sa5_inbox',[]),
-  kb:          lsGet('sa5_kb',JSON.parse(JSON.stringify(KB_DEF)))
+  events:        lsGet('sa5_events',[]),
+  feedbacks:     lsGet('sa5_feedbacks',[]),
+  postHistory:   lsGet('sa5_history',[]),
+  inbox:         lsGet('sa5_inbox',[]),
+  kb:            lsGet('sa5_kb',JSON.parse(JSON.stringify(KB_DEF))),
+  learnProfiles: lsGet('sa5_learn_profiles',{})
 };
 
 async function initDataFromServer(){
-  const keys = ['sa5_events','sa5_feedbacks','sa5_history','sa5_inbox','sa5_kb'];
-  const map = {sa5_events:'events',sa5_feedbacks:'feedbacks',sa5_history:'postHistory',sa5_inbox:'inbox',sa5_kb:'kb'};
-  const defaults = {events:[],feedbacks:[],postHistory:[],inbox:[],kb:JSON.parse(JSON.stringify(KB_DEF))};
+  const keys = ['sa5_events','sa5_feedbacks','sa5_history','sa5_inbox','sa5_kb','sa5_learn_profiles'];
+  const map = {sa5_events:'events',sa5_feedbacks:'feedbacks',sa5_history:'postHistory',sa5_inbox:'inbox',sa5_kb:'kb',sa5_learn_profiles:'learnProfiles'};
+  const defaults = {events:[],feedbacks:[],postHistory:[],inbox:[],kb:JSON.parse(JSON.stringify(KB_DEF)),learnProfiles:{}};
   for(const k of keys){
     const val = await serverGet(k, null);
     if(val!==null) DATA[map[k]] = val;
@@ -475,7 +493,7 @@ async function initDataFromServer(){
 }
 
 function save(key){
-  const map={events:'sa5_events',feedbacks:'sa5_feedbacks',postHistory:'sa5_history',inbox:'sa5_inbox',kb:'sa5_kb'};
+  const map={events:'sa5_events',feedbacks:'sa5_feedbacks',postHistory:'sa5_history',inbox:'sa5_inbox',kb:'sa5_kb',learnProfiles:'sa5_learn_profiles'};
   lsSet(map[key],DATA[key]);
   serverSet(map[key],DATA[key]);
 }
@@ -496,7 +514,7 @@ function selBrand(b,btn){
   document.getElementById('top-badge').className='badge '+BRAND_BADGES[b];
   genData=null;document.getElementById('res-card').style.display='none';
   document.getElementById('tr-row').style.display='none';
-  refreshEvSel();if(curView==='kb')renderKb();
+  refreshEvSel();if(curView==='kb')renderKb();if(curView==='learn')renderLearnProfile();
 }
 
 function selView(v,btn){
@@ -506,7 +524,7 @@ function selView(v,btn){
   ['gen','learn','events','kb','hist','inbox'].forEach(id=>{const el=document.getElementById('v-'+id);if(el){el.style.display=id===v?'flex':'none';el.classList.toggle('on',id===v);}});
   const labels={gen:'Generator postów',learn:'Uczenie agenta',events:'Baza eventów',kb:'Baza wiedzy',hist:'Historia',inbox:'Skrzynka bdb event'};
   document.getElementById('top-view').textContent=labels[v]||'';
-  if(v==='hist')renderHist();if(v==='events')renderEvList();if(v==='kb')renderKb();if(v==='inbox')renderInbox();
+  if(v==='hist')renderHist();if(v==='events')renderEvList();if(v==='kb')renderKb();if(v==='inbox')renderInbox();if(v==='learn')renderLearnProfile();
 }
 
 // ─── API CALL – przez backend ────────────────────────────────
@@ -589,6 +607,7 @@ function refreshEvSel(){
 
 function buildKbPrompt(brand){
   const kb=DATA.kb[brand]||KB_DEF[brand];
+  let _dna='';const _kb2=DATA.kb[brand]||KB_DEF[brand];if(_kb2.styleDNA){_dna='\n\nDNA STYLU AUTORA (odwzoruj ten styl DOKŁADNIE):\n'+_kb2.styleDNA;}if(_kb2.styleExamples&&_kb2.styleExamples.length){_dna+='\n\nWZORCOWE POSTY (pisz dokładnie w tym stylu):\n'+_kb2.styleExamples.slice(0,3).map((e,i)=>`--- Wzorzec ${i+1} ---\n${e}`).join('\n\n');}
   return`PROFIL MARKI Z BAZY WIEDZY:
 Marka: ${kb.identity?.name||BRAND_NAMES[brand]}
 Tagline: ${kb.identity?.tagline||''}
@@ -604,16 +623,82 @@ USP: ${kb.offer?.usp||''}
 Cennik: ${kb.offer?.pricing||''}
 Słowa kluczowe (używaj): ${kb.keywords?.must||''}
 Hashtagi: ${kb.keywords?.hashtags||''}
-Słowa zakazane: ${kb.keywords?.forbidden_words||''}`;
+Słowa zakazane: ${kb.keywords?.forbidden_words||''}${_dna}`;
 }
 
 function buildFbCtx(brand){
-  const bf=DATA.feedbacks.filter(f=>f.brand===brand);if(!bf.length)return'';
-  const avg=(bf.reduce((s,f)=>s+(f.stars||0),0)/bf.length).toFixed(1);
-  const tc={};bf.flatMap(f=>f.tags||[]).forEach(t=>{tc[t]=(tc[t]||0)+1;});
-  const top=Object.entries(tc).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([t])=>t);
-  const notes=bf.filter(f=>f.note).map(f=>'• '+f.note).join('\n');
-  return`\n\nPREFERENCJE WYUCZONE Z FEEDBACKU (zastosuj bezwzględnie):\n- Średnia ocena: ${avg}/5\n- Najczęstsze uwagi: ${top.join(', ')}\n${notes?'- Notatki:\n'+notes:''}`;
+  const profile = DATA.learnProfiles[brand];
+  const bf=DATA.feedbacks.filter(f=>f.brand===brand);
+  let ctx = '';
+
+  // Profil nauki (wyciągnięte wnioski co 20 feedbacków)
+  if(profile && profile.analysis){
+    ctx += `\n\nPROFIL NAUKI AGENTA (wyciągnięty z ${profile.feedbackCount} ocen, aktualizowany co 20):\n${profile.analysis}`;
+  }
+
+  // Ostatnie feedbacki od ostatniej analizy
+  const since = profile ? profile.feedbackCount : 0;
+  const recent = bf.slice(since);
+  if(recent.length){
+    const tc={};recent.flatMap(f=>f.tags||[]).forEach(t=>{tc[t]=(tc[t]||0)+1;});
+    const top=Object.entries(tc).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([t])=>t);
+    const notes=recent.filter(f=>f.note).map(f=>'• '+f.note).join('\n');
+    ctx += `\n\nNOWE OBSERWACJE (ostatnie ${recent.length} ocen, jeszcze nieprzetworzone):\n- Najczęstsze uwagi: ${top.join(', ')||'brak'}\n${notes?'- Notatki:\n'+notes:''}`;
+  }
+
+  return ctx;
+}
+
+// ─── ANALIZA CO 20 FEEDBACKÓW ────────────────────────────────
+async function maybeRunLearningAnalysis(brand){
+  const bf = DATA.feedbacks.filter(f=>f.brand===brand);
+  const profile = DATA.learnProfiles[brand] || {feedbackCount:0, analysis:'', updatedAt:null};
+  const newCount = bf.length;
+  const lastCount = profile.feedbackCount || 0;
+
+  // Uruchom analizę gdy przybyło 20+ nowych ocen
+  if(newCount - lastCount < 20) return;
+
+  showNotif('🧠 Analizuję ' + newCount + ' feedbacków dla ' + BRAND_NAMES[brand] + '...');
+
+  const goodPosts = bf.filter(f=>f.stars>=4).map(f=>`[DOBRY] Ocena: ${f.stars}/5, Tagi: ${(f.tags||[]).join(', ')}, Notatka: ${f.note||'brak'}`);
+  const badPosts  = bf.filter(f=>f.stars<=2 && f.stars>0).map(f=>`[ZŁY] Ocena: ${f.stars}/5, Tagi: ${(f.tags||[]).join(', ')}, Notatka: ${f.note||'brak'}`);
+
+  const brandKb = DATA.kb[brand]||{};
+  const prompt = `Jesteś analitykiem social media. Przeanalizuj ${newCount} ocen postów dla marki "${BRAND_NAMES[brand]}".
+
+MARKA: ${brandKb.identity?.name||brand}
+MISJA: ${brandKb.identity?.mission||''}
+ODBIORCY: ${brandKb.audience?.primary||''}
+
+DOBRE POSTY (${goodPosts.length} sztuk):
+${goodPosts.slice(-30).join('\n')||'brak'}
+
+ZŁE POSTY (${badPosts.length} sztuk):
+${badPosts.slice(-30).join('\n')||'brak'}
+
+Na podstawie tej analizy wyciągnij KONKRETNE wnioski w formie instrukcji dla agenta AI który będzie generować posty. Odpowiedz w formacie:
+
+TON I STYL: [konkretne wskazówki co działa, np. "używaj ciepłego, rodzinnego tonu", "unikaj korporacyjnego języka"]
+STRUKTURA: [jak budować posty, np. "zacznij od pytania", "CTA na końcu", "max 3 emoji"]
+TEMATY: [jakie tematy rezonują, np. "eventy lokalne", "bezpieczeństwo dzieci", "emocje i przygoda"]
+UNIKAJ: [co nie działa, konkretnie]
+WSKAZÓWKA GŁÓWNA: [jedno zdanie - najważniejsza lekcja z tych ocen]`;
+
+  try{
+    const result = await callAPIRaw(prompt, 800);
+    DATA.learnProfiles[brand] = {
+      analysis: result,
+      feedbackCount: newCount,
+      updatedAt: new Date().toLocaleDateString('pl-PL')
+    };
+    save('learnProfiles');
+    showNotif('✅ Agent zaktualizował profil nauki dla ' + BRAND_NAMES[brand] + '!');
+    // Odśwież widok uczenia jeśli aktywny
+    if(curView==='learn') renderLearnProfile();
+  }catch(e){
+    console.error('Analiza nieudana:', e);
+  }
 }
 
 function evCtxStr(ev){
@@ -690,7 +775,7 @@ async function refine(type){
 
 function setStar(n){curStar=n;document.querySelectorAll('.star').forEach((s,i)=>s.classList.toggle('on',i<n));}
 function togFbt(btn,tag){btn.classList.toggle('on');if(btn.classList.contains('on'))selFbTags.push(tag);else selFbTags=selFbTags.filter(t=>t!==tag);}
-function resetFb(){curStar=0;selFbTags=[];document.querySelectorAll('.star').forEach(s=>s.classList.remove('on'));document.querySelectorAll('.fbt').forEach(t=>t.classList.remove('on'));document.getElementById('fb-note').value='';document.getElementById('fb-ok').style.display='none';document.getElementById('fb-btn').disabled=false;}
+function resetFb(){curStar=0;selFbTags=[];document.querySelectorAll('.star').forEach(s=>s.classList.remove('on'));document.querySelectorAll('.fbt').forEach(t=>t.classList.remove('on'));document.getElementById('fb-note').value='';document.getElementById('fb-ok').style.display='none';document.getElementById('fb-btn').disabled=false;const ib=document.getElementById('fb-improve-btn');const rb=document.getElementById('fb-regen-btn');if(ib){ib.disabled=false;ib.innerHTML='<i class="ti ti-wand"></i> Zapisz i popraw post';}if(rb){rb.disabled=false;rb.innerHTML='<i class="ti ti-thumb-down"></i> Słaby – nowy post';}}
 
 function saveFb(){
   const note=document.getElementById('fb-note').value.trim();
@@ -700,6 +785,95 @@ function saveFb(){
   save('feedbacks');save('postHistory');
   document.getElementById('fb-ok').style.display='inline-flex';document.getElementById('fb-btn').disabled=true;
   updateStats();showNotif('Feedback zapisany!');
+  maybeRunLearningAnalysis(curBrand);
+}
+
+async function saveFbAndImprove(){
+  // Zapisz feedback
+  const note=document.getElementById('fb-note').value.trim();
+  const stars=curStar;const tags=[...selFbTags];
+  DATA.feedbacks.push({brand:curBrand,stars,tags,note,date:new Date().toLocaleDateString('pl-PL')});
+  if(DATA.postHistory.length){DATA.postHistory[0].stars=stars;DATA.postHistory[0].tags=[...tags];DATA.postHistory[0].note=note;}
+  save('feedbacks');save('postHistory');
+  updateStats();maybeRunLearningAnalysis(curBrand);
+  // Pobierz oryginalny post
+  const origPost = genData?(document.getElementById('plat-sel')?.value==='instagram'?genData.instagram:genData.blog&&document.getElementById('plat-sel')?.value==='blog'?genData.blog:genData.facebook)||'':'';
+  if(!origPost){showNotif('Brak posta do poprawy');return;}
+  // Blokuj przyciski i generuj
+  document.getElementById('fb-improve-btn').disabled=true;
+  document.getElementById('fb-improve-btn').innerHTML='<span class="spin"></span> Poprawiam...';
+  document.getElementById('fb-regen-btn').disabled=true;
+  const complaints=[];
+  if(tags.length) complaints.push('Problemy: '+tags.join(', '));
+  if(note) complaints.push('Sugestia autora: '+note);
+  if(stars&&stars<=3) complaints.push('Ocena: '+stars+'/5 – wymaga poprawy');
+  const prompt=`${buildKbPrompt(curBrand)}${buildFbCtx(curBrand)}
+
+ZADANIE: Popraw poniższy post zachowując jego temat i strukturę, ale eliminując wskazane problemy.
+
+ORYGINALNY POST:
+${origPost}
+
+CO POPRAWIĆ:
+${complaints.join('\n')||'Ogólna poprawa stylu i tonu'}
+
+ZASADY POPRAWY:
+- Zachowaj ten sam temat i kluczowe informacje
+- Popraw dokładnie to co wskazano w sugestiach
+- Zastosuj DNA stylu autora
+- NIE zmieniaj wszystkiego – to ma być ulepszona wersja, nie nowy post
+
+Odpowiedz TYLKO samym JSON: {"facebook":"...","instagram":"...","blog":"..."}`;
+  try{
+    const parsed=await callAPI(prompt,1200);
+    genData=parsed;
+    renderGenResult();
+    resetFb();
+    showNotif('✅ Post poprawiony wg Twoich sugestii!');
+  }catch(e){
+    document.getElementById('fb-improve-btn').disabled=false;
+    document.getElementById('fb-improve-btn').innerHTML='<i class="ti ti-wand"></i> Zapisz i popraw post';
+    document.getElementById('fb-regen-btn').disabled=false;
+    showNotif('Błąd generowania');
+  }
+}
+
+async function saveFbAndRegen(){
+  // Zapisz feedback z oceną "słaby" (1 gwiazdka jeśli nie ustawiono)
+  const note=document.getElementById('fb-note').value.trim();
+  const stars=curStar||1;const tags=[...selFbTags,'słaby post'];
+  DATA.feedbacks.push({brand:curBrand,stars,tags,note:note||(note?note:'Słaby post – wygenerowano nowy'),date:new Date().toLocaleDateString('pl-PL')});
+  if(DATA.postHistory.length){DATA.postHistory[0].stars=stars;DATA.postHistory[0].tags=tags;DATA.postHistory[0].note=note||'Słaby post';}
+  save('feedbacks');save('postHistory');
+  updateStats();maybeRunLearningAnalysis(curBrand);
+  // Blokuj i generuj nowy
+  document.getElementById('fb-regen-btn').disabled=true;
+  document.getElementById('fb-regen-btn').innerHTML='<span class="spin"></span> Generuję nowy...';
+  document.getElementById('fb-improve-btn').disabled=true;
+  const origPost = genData?(genData.facebook||''):'';
+  const avoidNote = note?`\nCZEGO UNIKAĆ (z poprzedniego posta): ${note}`:'';
+  const avoidTags = tags.length?`\nZGŁOSZONE PROBLEMY: ${tags.join(', ')}`:'';
+  const prompt=`${buildKbPrompt(curBrand)}${buildFbCtx(curBrand)}
+
+ZADANIE: Wygeneruj NOWY, zupełnie inny post dla marki ${BRAND_NAMES[curBrand]}.
+Poprzedni post był oceniony jako słaby i odrzucony.${avoidTags}${avoidNote}
+${origPost?`\nPOPRZEDNI ODRZUCONY POST (NIE kopiuj tego stylu/struktury):\n${origPost.substring(0,300)}`:''}
+
+Wygeneruj świeży post z innym podejściem, inną strukturą i innym stylem otwarcia. Zastosuj DNA stylu autora.
+
+Odpowiedz TYLKO samym JSON: {"facebook":"...","instagram":"...","blog":"..."}`;
+  try{
+    const parsed=await callAPI(prompt,1200);
+    genData=parsed;
+    renderGenResult();
+    resetFb();
+    showNotif('🔄 Nowy post wygenerowany!');
+  }catch(e){
+    document.getElementById('fb-regen-btn').disabled=false;
+    document.getElementById('fb-regen-btn').innerHTML='<i class="ti ti-thumb-down"></i> Słaby – nowy post';
+    document.getElementById('fb-improve-btn').disabled=false;
+    showNotif('Błąd generowania');
+  }
 }
 
 function transferToBdb(){
@@ -764,10 +938,63 @@ function saveLearnVerdict(i){
   document.getElementById('lc-saved-'+i).style.display='block';
   document.getElementById('lc-note-'+i).style.display='none';
   learnVerdicts[i]=learnVerdicts[i]||{};learnVerdicts[i].note=note;
+  maybeRunLearningAnalysis(curBrand);
   checkLearnDone();
 }
 
 function checkLearnDone(){const rated=Object.values(learnVerdicts).filter(v=>v.verdict).length;if(rated>=learnPosts.length&&learnPosts.length>0)showLearnSummary();}
+
+function renderLearnProfile(){
+  const profile = DATA.learnProfiles[curBrand];
+  const bf = DATA.feedbacks.filter(f=>f.brand===curBrand);
+  const lastCount = profile ? profile.feedbackCount : 0;
+  const newSince = bf.length - lastCount;
+  const nextAt = 20 - (newSince % 20);
+
+  document.getElementById('lp-brand-name').textContent = BRAND_NAMES[curBrand];
+
+  const statsEl = document.getElementById('lp-stats');
+  statsEl.textContent = `Łącznie ocen: ${bf.length} · Do kolejnej analizy: ${nextAt === 20 && bf.length > 0 ? 0 : nextAt} ocen`;
+
+  const forceBtn = document.getElementById('lp-force-btn');
+  forceBtn.style.display = bf.length >= 5 ? 'inline-flex' : 'none';
+
+  const cont = document.getElementById('learn-profile-content');
+  if(!profile || !profile.analysis){
+    cont.innerHTML = `<div style="font-size:13px;color:var(--text-3);font-style:italic">Agent jeszcze nie zebrał wystarczająco feedbacków (${bf.length}/20). Po 20 ocenach automatycznie wygeneruje profil nauki.</div>`;
+    return;
+  }
+
+  // Parsuj sekcje profilu
+  const lines = profile.analysis.split('\n').filter(l=>l.trim());
+  let html = `<div style="font-size:12px;color:var(--text-3);margin-bottom:.6rem">Ostatnia analiza: ${profile.updatedAt} · na podstawie ${profile.feedbackCount} ocen</div>`;
+  
+  const colors = {'TON I STYL':'var(--accent)','STRUKTURA':'var(--info)','TEMATY':'var(--warn)','UNIKAJ':'var(--danger)','WSKAZÓWKA GŁÓWNA':'var(--text)'};
+  
+  for(const line of lines){
+    const colon = line.indexOf(':');
+    if(colon > 0){
+      const key = line.substring(0, colon).trim();
+      const val = line.substring(colon+1).trim();
+      const color = colors[key] || 'var(--text-2)';
+      html += `<div style="margin-bottom:.5rem;font-size:13px;line-height:1.6">
+        <span style="font-weight:600;color:${color}">${key}:</span>
+        <span style="color:var(--text)"> ${val}</span>
+      </div>`;
+    }
+  }
+  cont.innerHTML = html;
+}
+
+async function forceAnalysis(){
+  const bf = DATA.feedbacks.filter(f=>f.brand===curBrand);
+  if(!bf.length){showNotif('Brak feedbacków do analizy');return;}
+  // Tymczasowo ustaw feedbackCount na 0 żeby wymusić analizę
+  const old = DATA.learnProfiles[curBrand];
+  DATA.learnProfiles[curBrand] = {...(old||{}), feedbackCount: 0};
+  await maybeRunLearningAnalysis(curBrand);
+  renderLearnProfile();
+}
 
 function showLearnSummary(){
   const good=Object.values(learnVerdicts).filter(v=>v.verdict==='ok').length;
@@ -814,7 +1041,110 @@ function renderEvList(){
 // ─── BAZA WIEDZY ─────────────────────────────────────────────
 function renderKb(){
   document.getElementById('kb-cats').innerHTML=KB_CATS.map(c=>`<button class="kb-cat${curKbCat===c.id?' on':''}" onclick="selKbCat('${c.id}')"><i class="ti ${c.icon}"></i><span>${c.label}</span></button>`).join('');
-  renderKbFields();
+  if(curKbCat==='style') renderStyleEditor();
+  else renderKbFields();
+}
+
+function renderStyleEditor(){
+  const ed=document.getElementById('kb-ed');
+  if(!DATA.kb[curBrand])DATA.kb[curBrand]=JSON.parse(JSON.stringify(KB_DEF[curBrand]));
+  const examples = DATA.kb[curBrand].styleExamples || [];
+  const dnaSummary = DATA.kb[curBrand].styleDNA || '';
+  
+  ed.innerHTML=`<div class="card" style="flex:1">
+    <div class="card-title"><i class="ti ti-fingerprint"></i> DNA Stylu – ${BRAND_NAMES[curBrand]}</div>
+    <div style="font-size:13px;color:var(--text-2);margin-bottom:1rem;line-height:1.6">
+      Wklej swoje <strong>najlepsze posty</strong> jako wzorzec. Agent wyciągnie z nich DNA Twojego stylu i będzie go odwzorowywać przy każdym generowaniu.
+    </div>
+    
+    ${dnaSummary ? `<div style="background:var(--accent-light);border:1px solid var(--accent-border);border-radius:var(--radius-sm);padding:.75rem 1rem;margin-bottom:1rem">
+      <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.5px">✦ Wyciągnięte DNA stylu</div>
+      <div style="font-size:12.5px;color:var(--text);line-height:1.7;white-space:pre-line">${dnaSummary}</div>
+    </div>` : ''}
+    
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+      <label style="margin:0">Wzorcowe posty (${examples.length})</label>
+      <div style="display:flex;gap:6px">
+        ${examples.length>=2?`<button class="btn" onclick="analyzeDNA()" id="dna-btn"><i class="ti ti-dna"></i> Analizuj DNA stylu</button>`:''}
+        <button class="btn pr" onclick="addStyleExample()"><i class="ti ti-plus"></i> Dodaj post</button>
+      </div>
+    </div>
+    
+    <div id="style-examples-list">
+      ${examples.length===0?`<div style="font-size:13px;color:var(--text-3);font-style:italic;padding:.75rem;border:1px dashed var(--border);border-radius:var(--radius-sm);text-align:center">Brak wzorcowych postów. Dodaj minimum 2 żeby agent mógł wyciągnąć DNA stylu.</div>`:''}
+      ${examples.map((ex,i)=>`<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:.6rem .75rem;margin-bottom:.5rem;position:relative">
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:.3rem">Post wzorcowy #${i+1}</div>
+        <div style="font-size:13px;color:var(--text);line-height:1.5;white-space:pre-line">${ex.substring(0,200)}${ex.length>200?'…':''}</div>
+        <button onclick="delStyleExample(${i})" style="position:absolute;top:.4rem;right:.4rem;background:none;border:none;color:var(--text-3);cursor:pointer;font-size:16px">×</button>
+      </div>`).join('')}
+    </div>
+    
+    <div id="style-add-form" style="display:none;margin-top:.75rem">
+      <textarea id="style-new-post" rows="5" placeholder="Wklej tutaj swój wzorcowy post..." style="width:100%;box-sizing:border-box"></textarea>
+      <div style="display:flex;gap:8px;margin-top:.5rem">
+        <button class="btn pr" onclick="confirmAddStyle()"><i class="ti ti-check"></i> Dodaj</button>
+        <button class="btn" onclick="document.getElementById('style-add-form').style.display='none'">Anuluj</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function addStyleExample(){
+  document.getElementById('style-add-form').style.display='block';
+  document.getElementById('style-new-post').focus();
+}
+
+function confirmAddStyle(){
+  const txt = document.getElementById('style-new-post').value.trim();
+  if(!txt){showNotif('Wklej post!');return;}
+  // Oczyść linki FB
+  const clean = txt.replace(/https?:\/\/\S+/g,'').replace(/\[\S+\]\(/g,'').trim();
+  if(!DATA.kb[curBrand].styleExamples) DATA.kb[curBrand].styleExamples=[];
+  DATA.kb[curBrand].styleExamples.push(clean);
+  saveKb();
+  renderStyleEditor();
+  showNotif('Post dodany!');
+}
+
+function delStyleExample(i){
+  DATA.kb[curBrand].styleExamples.splice(i,1);
+  saveKb();
+  renderStyleEditor();
+}
+
+async function analyzeDNA(){
+  const examples = DATA.kb[curBrand].styleExamples||[];
+  if(examples.length<2){showNotif('Dodaj minimum 2 posty');return;}
+  const btn=document.getElementById('dna-btn');
+  btn.disabled=true;btn.innerHTML='<span class="spin"></span> Analizuję...';
+  
+  const prompt=`Jesteś ekspertem od copywritingu social media. Przeanalizuj dokładnie te ${examples.length} wzorcowych postów i wyciągnij DNA stylu autora.
+
+POSTY WZORCOWE:
+${examples.map((e,i)=>`--- POST ${i+1} ---\n${e}`).join('\n\n')}
+
+Wyciągnij KONKRETNE cechy stylu w formacie (każda linia to osobna cecha, bez punktorów):
+
+RYTM ZDAŃ: [np. "Krótkie zdania 5-10 słów, potem jedno długie. Nigdy 3 długie z rzędu."]
+EMOJI: [np. "1-2 emoji na końcu zdania, nigdy w środku. Typy: koszykówka, ogień, tłum"]
+OTWIERANIE POSTÓW: [np. "Zawsze zaczyna od faktu lub nazwy eventu, nigdy od pytania"]
+ZAMYKANIE/CTA: [np. "Krótkie zdanie rozkazujące + wykrzyknik. 'Wpadajcie!', 'Do zobaczenia!'"]
+INTERPUNKCJA: [np. "Dużo wykrzykników, brak myślników, akapity po każdym zdaniu-myśli"]
+JĘZYK: [np. "Sportowy, emocjonalny, kolokwialny. Charakterystyczne zwroty: 'walka do ostatnich sekund', 'wielkie emocje'"]
+STRUKTURA: [np. "3-4 akapity: intro akcja → detale → poinformowanie → CTA"]
+HASHTAGI: [np. "5-8 hashtagów na końcu, po tagowaniu osób"]`;
+
+  try{
+    const result = await callAPIRaw(prompt, 600);
+    DATA.kb[curBrand].styleDNA = result;
+    saveKb();
+    renderStyleEditor();
+    showNotif('✅ DNA stylu wyciągnięte!');
+  }catch(e){
+    btn.disabled=false;
+    btn.innerHTML='<i class="ti ti-dna"></i> Analizuj DNA stylu';
+    showNotif('Błąd analizy');
+  }
 }
 function selKbCat(c){curKbCat=c;renderKb();}
 function renderKbFields(){
