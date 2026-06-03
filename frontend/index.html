@@ -436,6 +436,25 @@ const KB_DEF = {
 function lsGet(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 
+// ─── SERVER KV STORE ─────────────────────────────────────────
+async function serverGet(key, def){
+  try{
+    const r=await fetch(`${API_BASE}/api/store/${key}`);
+    if(!r.ok) return def;
+    const d=await r.json();
+    return d.value!==null && d.value!==undefined ? d.value : def;
+  }catch(e){return def;}
+}
+async function serverSet(key, value){
+  try{
+    lsSet(key, value);
+    await fetch(`${API_BASE}/api/store`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({key,value})
+    });
+  }catch(e){}
+}
+
 let DATA = {
   events:      lsGet('sa5_events',[]),
   feedbacks:   lsGet('sa5_feedbacks',[]),
@@ -443,7 +462,23 @@ let DATA = {
   inbox:       lsGet('sa5_inbox',[]),
   kb:          lsGet('sa5_kb',JSON.parse(JSON.stringify(KB_DEF)))
 };
-function save(key){const map={events:'sa5_events',feedbacks:'sa5_feedbacks',postHistory:'sa5_history',inbox:'sa5_inbox',kb:'sa5_kb'};lsSet(map[key],DATA[key]);}
+
+async function initDataFromServer(){
+  const keys = ['sa5_events','sa5_feedbacks','sa5_history','sa5_inbox','sa5_kb'];
+  const map = {sa5_events:'events',sa5_feedbacks:'feedbacks',sa5_history:'postHistory',sa5_inbox:'inbox',sa5_kb:'kb'};
+  const defaults = {events:[],feedbacks:[],postHistory:[],inbox:[],kb:JSON.parse(JSON.stringify(KB_DEF))};
+  for(const k of keys){
+    const val = await serverGet(k, null);
+    if(val!==null) DATA[map[k]] = val;
+  }
+  updateStats(); updateInboxBadge();
+}
+
+function save(key){
+  const map={events:'sa5_events',feedbacks:'sa5_feedbacks',postHistory:'sa5_history',inbox:'sa5_inbox',kb:'sa5_kb'};
+  lsSet(map[key],DATA[key]);
+  serverSet(map[key],DATA[key]);
+}
 
 function showNotif(msg){const n=document.getElementById('notif');document.getElementById('notif-txt').textContent=msg;n.classList.add('show');clearTimeout(window._nt);window._nt=setTimeout(()=>n.classList.remove('show'),2200);}
 
@@ -501,7 +536,7 @@ async function checkHealth(){
     const r=await fetch(`${API_BASE}/api/health`);
     const d=await r.json();
     const dot=document.getElementById('api-dot'),txt=document.getElementById('api-txt');
-    if(d.api_key_set){dot.className='api-dot ok';txt.textContent='Backend OK · '+d.api_key_preview;}
+    if(d.api_key_set){dot.className='api-dot ok';txt.textContent='Backend OK · '+d.api_key_preview+(d.db_connected?' · DB ✓':' · DB ✗');}
     else{dot.className='api-dot err';txt.textContent='Brak klucza API!';}
   }catch(e){
     document.getElementById('api-dot').className='api-dot err';
@@ -509,6 +544,7 @@ async function checkHealth(){
   }
 }
 checkHealth();
+initDataFromServer();
 
 // ─── GENERATOR UTILS ─────────────────────────────────────────
 function onGoalChange(){const ph={promocja:'Np. podkreśl nagrodę, limit miejsc...',informacje:'Np. harmonogram, zasady uczestnictwa...',wspomnienia:'Np. wspomnij zwycięzców, frekwencję...'};document.getElementById('topic-in').placeholder=ph[document.getElementById('goal-sel').value]||'';}
