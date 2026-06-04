@@ -3,12 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, Any
 import anthropic
 import os
 import json
-import psycopg2
-import psycopg2.extras
+import httpx
 from pathlib import Path
 
 app = FastAPI(title="Social AI API")
@@ -24,6 +23,7 @@ client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 BASE_DIR = Path(__file__).parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
+
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 @app.get("/")
@@ -31,131 +31,95 @@ def root():
     return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
-# ── BAZA DANYCH ──────────────────────────────────────────────
+# ── SUPABASE CONFIG ──────────────────────────────────────────
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://gbjlacbtiisvzdtlsipw.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
-def get_db():
-    db_url = os.environ.get("DATABASE_URL", "")
-    if not db_url:
-        raise Exception("Brak DATABASE_URL")
-    
-    # Railway wymaga sslmode=require dla połączeń wewnętrznych
-    if "sslmode" not in db_url:
-        if "?" in db_url:
-            db_url += "&sslmode=require"
-        else:
-            db_url += "?sslmode=require"
-    
-    conn = psycopg2.connect(db_url)
-    return conn
-
+def supa_headers():
+    return {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation"
+    }
 
 def init_db():
+    """Tworzy tabelę store przez Supabase REST API."""
+    # Supabase REST nie pozwala na CREATE TABLE – tabela musi być stworzona w SQL Editor
+    # Sprawdzamy tylko czy połączenie działa
     try:
-        conn = get_db()
-        cur = conn.cursor()
-
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS feedbacks (
-                id SERIAL PRIMARY KEY,
-                brand VARCHAR(20) NOT NULL,
-                stars INTEGER DEFAULT 0,
-                tags JSONB DEFAULT '[]',
-                note TEXT DEFAULT '',
-                from_learn BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS knowledge_base (
-                id SERIAL PRIMARY KEY,
-                brand VARCHAR(20) UNIQUE NOT NULL,
-                data JSONB NOT NULL,
-                updated_at TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS events (
-                id BIGINT PRIMARY KEY,
-                brand VARCHAR(20) NOT NULL,
-                name TEXT NOT NULL,
-                date VARCHAR(20),
-                loc TEXT DEFAULT '',
-                description TEXT DEFAULT '',
-                created_at TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS post_history (
-                id BIGINT PRIMARY KEY,
-                brand VARCHAR(20) NOT NULL,
-                brand_name TEXT,
-                badge VARCHAR(10),
-                event_name TEXT,
-                goal TEXT,
-                is_blog BOOLEAN DEFAULT FALSE,
-                content TEXT,
-                stars INTEGER DEFAULT 0,
-                tags JSONB DEFAULT '[]',
-                note TEXT DEFAULT '',
-                created_at TIMESTAMP DEFAULT NOW()
-            )
-        """)
-
-        conn.commit()
-        cur.close()
-        conn.close()
-        print("✓ Baza danych OK")
-        return True
+        r = httpx.get(
+            f"{SUPABASE_URL}/rest/v1/store?limit=1",
+            headers=supa_headers(),
+            timeout=5
+        )
+        if r.status_code == 404 or (r.status_code == 400 and "does not exist" in r.text):
+            print("DB: tabela 'store' nie istnieje – stwórz ją w Supabase SQL Editor")
+        else:
+            print(f"DB: połączenie OK (status {r.status_code})")
     except Exception as e:
         print(f"DB init warning: {e}")
-        return False
+
+init_db()
 
 
-DB_OK = init_db()
-
-
-# ── MODELE ───────────────────────────────────────────────────
-
+# ── MODELE ──────────────────────────────────────────────────
 class GenerateRequest(BaseModel):
     prompt: str
     max_tokens: int = 1200
 
-class FeedbackCreate(BaseModel):
-    brand: str
-    stars: int = 0
-    tags: List[str] = []
-    note: str = ""
-    from_learn: bool = False
+class GenerateResponse(BaseModel):
+    content: str
+    usage: Optional[dict] = None
 
-class KbSave(BaseModel):
-    brand: str
-    data: dict
+class StoreSetRequest(BaseModel):
+    key: str
+    value: Any
 
-class EventCreate(BaseModel):
-    id: int
-    brand: str
-    name: str
-    date: str = ""
-    loc: str = ""
-    desc: str = ""
-
-class PostHistoryCreate(BaseModel):
-    id: int
-    brand: str
-    brand_name: str
-    badge: str
-    event_name: Optional[str] = None
-    goal: str
-    is_blog: bool = False
-    text: str
-    stars: int = 0
-    tags: List[str] = []
-    note: str = ""
+class StoreGetResponse(BaseModel):
+    key: str
+    value: Any
 
 
-# ── GENEROWANIE ──────────────────────────────────────────────
+# ── ENDPOINTY – KV STORE ─────────────────────────────────────
+@app.get("/api/store/{key}", response_model=StoreGetResponse)
+def store_get(key: str):
+    try:
+        r = httpx.get(
+            f"{SUPABASE_URL}/rest/v1/store?key=eq.{key}&select=value",
+            headers=supa_headers(),
+            timeout=5
+        )
+        if r.status_code != 200:
+            return StoreGetResponse(key=key, value=None)
+        rows = r.json()
+        if not rows:
+            return StoreGetResponse(key=key, value=None)
+        return StoreGetResponse(key=key, value=rows[0]["value"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/generate")
+@app.post("/api/store")
+def store_set(req: StoreSetRequest):
+    try:
+        payload = {"key": req.key, "value": req.value}
+        r = httpx.post(
+            f"{SUPABASE_URL}/rest/v1/store",
+            headers={**supa_headers(), "Prefer": "resolution=merge-duplicates,return=minimal"},
+            json=payload,
+            timeout=5
+        )
+        if r.status_code not in (200, 201, 204):
+            raise HTTPException(status_code=500, detail=r.text)
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── ENDPOINTY – AI ───────────────────────────────────────────
+@app.post("/api/generate", response_model=GenerateResponse)
 def generate(req: GenerateRequest):
     try:
         response = client.messages.create(
@@ -163,8 +127,16 @@ def generate(req: GenerateRequest):
             max_tokens=req.max_tokens,
             messages=[{"role": "user", "content": req.prompt}]
         )
-        content = "".join(b.text for b in response.content if hasattr(b, "text"))
-        return {"content": content}
+        content = "".join(
+            block.text for block in response.content if hasattr(block, "text")
+        )
+        return GenerateResponse(
+            content=content,
+            usage={
+                "input": response.usage.input_tokens,
+                "output": response.usage.output_tokens
+            }
+        )
     except anthropic.AuthenticationError:
         raise HTTPException(status_code=401, detail="Nieprawidłowy klucz API.")
     except anthropic.RateLimitError:
@@ -173,180 +145,22 @@ def generate(req: GenerateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── FEEDBACK ─────────────────────────────────────────────────
-
-@app.post("/api/feedback")
-def save_feedback(fb: FeedbackCreate):
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO feedbacks (brand, stars, tags, note, from_learn) VALUES (%s, %s, %s, %s, %s)",
-            (fb.brand, fb.stars, json.dumps(fb.tags), fb.note, fb.from_learn)
-        )
-        conn.commit(); cur.close(); conn.close()
-        return {"ok": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/feedback/{brand}")
-def get_feedback(brand: str):
-    try:
-        conn = get_db()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(
-            "SELECT brand, stars, tags, note, from_learn FROM feedbacks WHERE brand=%s ORDER BY created_at DESC LIMIT 100",
-            (brand,)
-        )
-        rows = cur.fetchall()
-        cur.close(); conn.close()
-        return {"feedbacks": [dict(r) for r in rows]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/feedback")
-def get_all_feedback():
-    try:
-        conn = get_db()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute("SELECT brand, stars, tags, note, from_learn FROM feedbacks ORDER BY created_at DESC LIMIT 500")
-        rows = cur.fetchall()
-        cur.close(); conn.close()
-        return {"feedbacks": [dict(r) for r in rows]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ── BAZA WIEDZY ──────────────────────────────────────────────
-
-@app.post("/api/kb")
-def save_kb(kb: KbSave):
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO knowledge_base (brand, data, updated_at)
-            VALUES (%s, %s, NOW())
-            ON CONFLICT (brand) DO UPDATE SET data=%s, updated_at=NOW()
-        """, (kb.brand, json.dumps(kb.data), json.dumps(kb.data)))
-        conn.commit(); cur.close(); conn.close()
-        return {"ok": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/kb/{brand}")
-def get_kb(brand: str):
-    try:
-        conn = get_db()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute("SELECT data FROM knowledge_base WHERE brand=%s", (brand,))
-        row = cur.fetchone()
-        cur.close(); conn.close()
-        return {"data": row["data"] if row else None}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ── EVENTY ───────────────────────────────────────────────────
-
-@app.post("/api/events")
-def save_event(ev: EventCreate):
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO events (id, brand, name, date, loc, description)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO UPDATE SET name=%s, date=%s, loc=%s, description=%s
-        """, (ev.id, ev.brand, ev.name, ev.date, ev.loc, ev.desc,
-              ev.name, ev.date, ev.loc, ev.desc))
-        conn.commit(); cur.close(); conn.close()
-        return {"ok": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/api/events/{event_id}")
-def delete_event(event_id: int):
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("DELETE FROM events WHERE id=%s", (event_id,))
-        conn.commit(); cur.close(); conn.close()
-        return {"ok": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/events")
-def get_events():
-    try:
-        conn = get_db()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute("SELECT id, brand, name, date, loc, description as desc FROM events ORDER BY date ASC")
-        rows = cur.fetchall()
-        cur.close(); conn.close()
-        return {"events": [dict(r) for r in rows]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ── HISTORIA ─────────────────────────────────────────────────
-
-@app.post("/api/history")
-def save_history(p: PostHistoryCreate):
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO post_history (id, brand, brand_name, badge, event_name, goal, is_blog, content, stars, tags, note)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (id) DO UPDATE SET stars=%s, tags=%s, note=%s
-        """, (p.id, p.brand, p.brand_name, p.badge, p.event_name, p.goal,
-              p.is_blog, p.text, p.stars, json.dumps(p.tags), p.note,
-              p.stars, json.dumps(p.tags), p.note))
-        conn.commit(); cur.close(); conn.close()
-        return {"ok": True}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/history")
-def get_history():
-    try:
-        conn = get_db()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute("""
-            SELECT id, brand, brand_name, badge, event_name, goal, is_blog,
-                   content as text, stars, tags, note,
-                   TO_CHAR(created_at, 'DD.MM.YYYY') as date
-            FROM post_history ORDER BY created_at DESC LIMIT 50
-        """)
-        rows = cur.fetchall()
-        cur.close(); conn.close()
-        return {"history": [dict(r) for r in rows]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ── HEALTH ───────────────────────────────────────────────────
-
 @app.get("/api/health")
 def health():
     key = os.environ.get("ANTHROPIC_API_KEY", "")
     db_ok = False
-    db_error = ""
     try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT 1")
-        cur.close()
-        conn.close()
-        db_ok = True
-    except Exception as e:
-        db_error = str(e)
-
+        r = httpx.get(
+            f"{SUPABASE_URL}/rest/v1/store?limit=1",
+            headers=supa_headers(),
+            timeout=5
+        )
+        db_ok = r.status_code in (200, 206)
+    except:
+        pass
     return {
         "status": "ok",
         "api_key_set": bool(key),
         "api_key_preview": key[:8] + "..." if key else "BRAK",
-        "db_connected": db_ok,
-        "db_error": db_error  # pokaże dokładny błąd
+        "db_connected": db_ok
     }
