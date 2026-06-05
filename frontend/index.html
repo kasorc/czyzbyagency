@@ -256,8 +256,8 @@ textarea:focus{border-color:var(--accent)}
     <div class="sb-logo-sub">Social AI · panel</div>
   </div>
   <div class="sb-sec">Narzędzia</div>
-  <button class="sb-btn" id="nav-dash" onclick="selView('dash',this);closeSb()"><i class="ti ti-layout-dashboard"></i> Dashboard</button>
-  <button class="sb-btn on" id="nav-gen" onclick="selView('gen',this);closeSb()"><i class="ti ti-wand"></i> Generator postów</button>
+  <button class="sb-btn on" id="nav-dash" onclick="selView('dash',this);closeSb()"><i class="ti ti-layout-dashboard"></i> Dashboard</button>
+  <button class="sb-btn" id="nav-gen" onclick="selView('gen',this);closeSb()"><i class="ti ti-wand"></i> Generator postów</button>
   <button class="sb-btn" id="nav-learn" onclick="selView('learn',this);closeSb()"><i class="ti ti-brain"></i> Uczenie agenta</button>
   <button class="sb-btn" id="nav-events" onclick="selView('events',this);closeSb()"><i class="ti ti-calendar-plus"></i> Baza eventów</button>
   <button class="sb-btn" id="nav-kb" onclick="selView('kb',this);closeSb()"><i class="ti ti-database"></i> Baza wiedzy</button>
@@ -281,7 +281,7 @@ textarea:focus{border-color:var(--accent)}
   </div>
 
   <!-- DASHBOARD -->
-  <div id="v-dash" class="view" style="gap:1rem">
+  <div id="v-dash" class="view on" style="gap:1rem">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem">
       <div class="card" style="text-align:center;padding:1rem .75rem">
         <div style="font-size:28px;font-weight:700;color:var(--accent)" id="dash-posts">–</div>
@@ -322,7 +322,7 @@ textarea:focus{border-color:var(--accent)}
   </div>
 
   <!-- GENERATOR -->
-  <div id="v-gen" class="view on">
+  <div id="v-gen" class="view">
     <div class="card">
       <div class="card-title"><i class="ti ti-wand"></i> Ustawienia posta</div>
       <div class="r2">
@@ -650,7 +650,7 @@ async function initDataFromServer(){
       else if(k==='sa5_goals_custom'){ Object.assign(GOALS, val); renderGoalSelect(); }
     }
   }
-  updateStats(); updateInboxBadge();
+  updateStats(); updateInboxBadge(); renderDashboard();
 }
 
 function save(key){
@@ -662,7 +662,7 @@ function save(key){
 function showNotif(msg){const n=document.getElementById('notif');document.getElementById('notif-txt').textContent=msg;n.classList.add('show');clearTimeout(window._nt);window._nt=setTimeout(()=>n.classList.remove('show'),2200);}
 
 // ─── NAWIGACJA ───────────────────────────────────────────────
-let curBrand='winter',curView='gen',curPlat='facebook',isBlog=false;
+let curBrand='winter',curView='dash',curPlat='facebook',isBlog=false;
 let curStar=0,selFbTags=[],genData=null,curEvId=null,curKbCat='identity';
 
 document.getElementById('td').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'});
@@ -747,7 +747,7 @@ async function checkHealth(){
     const r=await fetch(`${API_BASE}/api/health`);
     const d=await r.json();
     const dot=document.getElementById('api-dot'),txt=document.getElementById('api-txt');
-    if(d.api_key_set){dot.className='api-dot ok';txt.textContent='Backend OK · '+d.api_key_preview+(d.db_connected?' · DB ✓':' · DB ✗');}
+    if(d.api_key_set){dot.className='api-dot ok';txt.textContent='Backend OK · '+d.api_key_preview+(d.db_connected?' · DB ✓':' · DB ✗ (sprawdź SUPABASE_KEY)');}
     else{dot.className='api-dot err';txt.textContent='Brak klucza API!';}
   }catch(e){
     document.getElementById('api-dot').className='api-dot err';
@@ -1647,42 +1647,66 @@ function updateLearnWidget(){
 
 // ─── DASHBOARD ────────────────────────────────────────────────
 function renderDashboard(){
-  const bf=DATA.feedbacks.filter(f=>f.brand===curBrand);
-  const ph=DATA.postHistory.filter(p=>p.brand===curBrand);
-  const evs=DATA.events.filter(e=>e.brand===curBrand);
-  document.getElementById('dash-posts').textContent=ph.length;
-  document.getElementById('dash-feedbacks').textContent=bf.length;
-  document.getElementById('dash-events').textContent=evs.length;
+  if(!document.getElementById('dash-posts'))return;
+  const brand=curBrand||'winter';
+  const bf=DATA.feedbacks.filter(f=>f.brand===brand);
+  const ph=DATA.postHistory.filter(p=>p.brand===brand);
+  const evs=DATA.events.filter(e=>e.brand===brand);
+
+  document.getElementById('dash-posts').textContent=ph.length||'0';
+  document.getElementById('dash-feedbacks').textContent=bf.length||'0';
+  document.getElementById('dash-events').textContent=evs.length||'0';
   const rated=bf.filter(f=>f.stars>0);
   document.getElementById('dash-avg').textContent=rated.length?(rated.reduce((s,f)=>s+f.stars,0)/rated.length).toFixed(1)+'★':'–';
-  document.getElementById('dash-brand-name').textContent=BRAND_NAMES[curBrand];
+  document.getElementById('dash-brand-name').textContent=BRAND_NAMES[brand];
+
   // Status nauki
-  const profile=DATA.learnProfiles[curBrand];
+  const profile=DATA.learnProfiles[brand];
   const newSince=bf.length-(profile?profile.feedbackCount:0);
-  const toNext=Math.max(0,10-(newSince%10));
+  const toNext=10-(newSince%10)||10;
   const bar=document.getElementById('dash-learn-bar');
   const pct=document.getElementById('dash-learn-pct');
-  if(bar)bar.style.width=Math.min((newSince%10)/10*100,100)+'%';
+  const progress=Math.min(((newSince%10)/10)*100,100);
+  if(bar)bar.style.width=progress+'%';
   if(pct)pct.textContent=(newSince%10)+'/10';
   const learnEl=document.getElementById('dash-learn-status');
   if(learnEl){
-    if(!profile||!profile.analysis){learnEl.textContent='Brak analizy. Oceń '+toNext+' postów aby agent wyciągnął wnioski.';}
-    else{
-      const lines=profile.analysis.split('\n').filter(l=>l.trim()&&l.includes(':')).slice(0,2);
-      learnEl.innerHTML='<div style="margin-bottom:4px;font-size:11px;color:var(--text-3)">Ostatnia analiza: '+profile.updatedAt+'</div>'+lines.map(l=>'<div style="margin-bottom:2px">'+l+'</div>').join('');
+    if(!profile||!profile.analysis){
+      learnEl.innerHTML=`<div style="color:var(--text-3);font-style:italic">Brak analizy. Oceń pierwsze <strong>${toNext}</strong> postów, a agent automatycznie wyciągnie wnioski o Twoim stylu.</div>`;
+    } else {
+      const lines=profile.analysis.split('\n').filter(l=>l.trim()&&l.includes(':')).slice(0,3);
+      learnEl.innerHTML=`<div style="font-size:11px;color:var(--text-3);margin-bottom:.4rem">Ostatnia analiza: ${profile.updatedAt} · ${profile.feedbackCount} ocen</div>`
+        +lines.map(l=>{const c=l.indexOf(':');return`<div style="display:flex;gap:5px;margin-bottom:3px;font-size:12.5px"><span style="color:var(--accent);font-weight:600;min-width:80px;font-size:11px">${l.substring(0,c)}</span><span>${l.substring(c+1).trim()}</span></div>`;}).join('');
     }
   }
+
   // Ostatni post
   const lastEl=document.getElementById('dash-last-post');
   if(lastEl){
-    if(!ph.length){lastEl.textContent='Brak historii.';}
-    else{const p=ph[0];lastEl.innerHTML=`<div style="font-size:11px;color:var(--text-3);margin-bottom:4px">${p.date} · ${p.goal}</div><div style="overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">${p.text||''}</div>`;}
+    if(!ph.length){
+      lastEl.innerHTML=`<div style="color:var(--text-3);font-style:italic;font-size:13px">Nie wygenerowano jeszcze żadnego posta. Kliknij "Nowy post" aby zacząć.</div>`;
+    } else {
+      const p=ph[0];
+      lastEl.innerHTML=`<div style="font-size:11px;color:var(--text-3);margin-bottom:.35rem">${p.date||''} · ${p.goal||''} ${p.stars?'· '+'★'.repeat(p.stars):''}</div><div style="font-size:13px;line-height:1.6;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">${(p.text||'').replace(/</g,'&lt;')}</div>`;
+    }
   }
+
   // Nadchodzące eventy
   const evEl=document.getElementById('dash-events-list');
   if(evEl){
-    if(!evs.length){evEl.textContent='Brak eventów w bazie.';}
-    else{evEl.innerHTML=evs.slice(0,3).map(e=>`<div style="display:flex;align-items:center;gap:8px;padding:.4rem 0;border-bottom:1px solid var(--border-light)"><i class="ti ti-calendar-event" style="color:var(--accent)"></i><div><div style="font-weight:500">${e.name}</div><div style="font-size:11px;color:var(--text-3)">${e.date||'bez daty'}</div></div></div>`).join('');}
+    if(!evs.length){
+      evEl.innerHTML=`<div style="color:var(--text-3);font-style:italic;font-size:13px">Brak eventów. Dodaj eventy w zakładce "Baza eventów".</div>`;
+    } else {
+      evEl.innerHTML=evs.slice(0,4).map(e=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:.45rem 0;border-bottom:1px solid var(--border-light)">
+          <div style="width:36px;height:36px;background:var(--accent-light);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-calendar-event" style="color:var(--accent);font-size:16px"></i></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.name||'Event'}</div>
+            <div style="font-size:11px;color:var(--text-3)">${e.date||'bez daty'}${e.location?' · '+e.location:''}</div>
+          </div>
+          <button class="btn" onclick="selView('gen',document.getElementById('nav-gen'));setTimeout(()=>selEv('${e.id}'),100)" style="padding:3px 8px;font-size:11px;white-space:nowrap"><i class="ti ti-wand"></i> Post</button>
+        </div>`).join('');
+    }
   }
 }
 
@@ -1705,7 +1729,7 @@ function closeSb(){document.getElementById('main-sb').classList.remove('open');d
 // Ustaw domyślny kolor marki
 document.querySelector('.app').classList.add('brand-winter');
 renderGoalSelect();
-updateStats();updateInboxBadge();refreshEvSel();updateLearnWidget();
+updateStats();updateInboxBadge();refreshEvSel();updateLearnWidget();renderDashboard();
 </script>
 </div><!-- /flex-wrapper -->
 </div><!-- /app -->
