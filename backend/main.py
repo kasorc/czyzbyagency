@@ -23,11 +23,25 @@ client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 BASE_DIR = Path(__file__).parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
+BRANDS_DIR = FRONTEND_DIR / "brands"
 
+# Serwuj zasoby statyczne
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+
+# Serwuj pliki marek pod /brands/
+if BRANDS_DIR.exists():
+    app.mount("/brands", StaticFiles(directory=str(BRANDS_DIR)), name="brands")
 
 @app.get("/")
 def root():
+    return FileResponse(str(FRONTEND_DIR / "index.html"))
+
+@app.get("/brands/{brand_file}")
+def brand_page(brand_file: str):
+    safe = brand_file.replace("..", "").replace("/", "")
+    path = BRANDS_DIR / safe
+    if path.exists() and path.suffix == ".html":
+        return FileResponse(str(path))
     return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
