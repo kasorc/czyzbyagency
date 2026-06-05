@@ -145,6 +145,35 @@ def generate(req: GenerateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/stream")
+def stream_endpoint(req: GenerateRequest):
+    from fastapi.responses import StreamingResponse as SR
+    import json as _json
+
+    def generator():
+        try:
+            with client.messages.stream(
+                model="claude-sonnet-4-20250514",
+                max_tokens=req.max_tokens,
+                messages=[{"role": "user", "content": req.prompt}]
+            ) as s:
+                for text in s.text_stream:
+                    yield f"data: {_json.dumps({'delta': text})}\n\n"
+            yield "data: [DONE]\n\n"
+        except anthropic.AuthenticationError:
+            yield f"data: {_json.dumps({'error': 'Nieprawidłowy klucz API'})}\n\n"
+        except anthropic.RateLimitError:
+            yield f"data: {_json.dumps({'error': 'Limit zapytań'})}\n\n"
+        except Exception as e:
+            yield f"data: {_json.dumps({'error': str(e)})}\n\n"
+
+    return SR(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
+
+
 @app.get("/api/health")
 def health():
     key = os.environ.get("ANTHROPIC_API_KEY", "")
