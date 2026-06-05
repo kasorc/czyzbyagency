@@ -67,6 +67,8 @@ init_db()
 class GenerateRequest(BaseModel):
     prompt: str
     max_tokens: int = 1200
+    image_base64: Optional[str] = None
+    image_media_type: Optional[str] = "image/jpeg"
 
 class GenerateResponse(BaseModel):
     content: str
@@ -122,10 +124,29 @@ def store_set(req: StoreSetRequest):
 @app.post("/api/generate", response_model=GenerateResponse)
 def generate(req: GenerateRequest):
     try:
+        # Build message content – with or without image
+        if req.image_base64:
+            messages = [{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": req.image_media_type or "image/jpeg",
+                            "data": req.image_base64
+                        }
+                    },
+                    {"type": "text", "text": req.prompt}
+                ]
+            }]
+        else:
+            messages = [{"role": "user", "content": req.prompt}]
+
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=req.max_tokens,
-            messages=[{"role": "user", "content": req.prompt}]
+            messages=messages
         )
         content = "".join(
             block.text for block in response.content if hasattr(block, "text")
