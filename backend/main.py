@@ -36,6 +36,14 @@ if BRANDS_DIR.exists():
 def root():
     return FileResponse(str(FRONTEND_DIR / "index.html"))
 
+@app.get("/wiedza")
+def wiedza_page():
+    path = FRONTEND_DIR / "wiedza.html"
+    if path.exists():
+        return FileResponse(str(path))
+    return FileResponse(str(FRONTEND_DIR / "index.html"))
+
+
 @app.get("/brands/{brand_file}")
 def brand_page(brand_file: str):
     safe = brand_file.replace("..", "").replace("/", "")
@@ -207,6 +215,21 @@ def stream_endpoint(req: GenerateRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     )
+
+
+@app.get("/api/store-list")
+def store_list(prefix: str = ""):
+    """Zwraca wszystkie klucze (i wartości) pasujące do prefiksu."""
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/store?select=key,value"
+        if prefix:
+            url += f"&key=like.{prefix}%"
+        r = httpx.get(url, headers=supa_headers(), timeout=10)
+        if r.status_code != 200:
+            return {"rows": []}
+        return {"rows": r.json()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/health")
