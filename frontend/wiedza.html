@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Social AI – Eksport / Import wiedzy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:#F7F6F3;color:#1A1916;min-height:100vh;padding:2rem 1rem}
+.wrap{max-width:780px;margin:0 auto}
+.topbar{display:flex;align-items:center;gap:12px;margin-bottom:2rem}
+.back{display:flex;align-items:center;gap:6px;font-size:13px;color:#9E9B93;text-decoration:none;padding:5px 12px;border:1px solid #E4E2DC;border-radius:6px;background:#fff;transition:all .15s}
+.back:hover{background:#F7F6F3;color:#1A1916}
+h1{font-size:20px;font-weight:700;letter-spacing:-.3px}
+h1 span{font-size:13px;font-weight:400;color:#9E9B93;margin-left:8px;font-family:'DM Mono',monospace}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.5rem}
+@media(max-width:600px){.grid{grid-template-columns:1fr}}
+.card{background:#fff;border:1px solid #E4E2DC;border-radius:10px;padding:1.25rem}
+.card-icon{width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:.875rem}
+.card h2{font-size:15px;font-weight:600;margin-bottom:.3rem}
+.card p{font-size:12.5px;color:#5C5A54;line-height:1.6;margin-bottom:1rem}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:6px;border:1px solid #E4E2DC;background:#fff;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif;color:#1A1916}
+.btn:hover{background:#F7F6F3}
+.btn.pr{background:#1A1916;color:#fff;border-color:#1A1916}
+.btn.pr:hover{background:#2D2D2D}
+.btn.green{background:#2D6A4F;color:#fff;border-color:#2D6A4F}
+.btn.green:hover{background:#245a41}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.brands-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:1rem}
+.brand-check{display:flex;align-items:center;gap:7px;padding:7px 10px;border:1.5px solid #E4E2DC;border-radius:6px;cursor:pointer;font-size:12.5px;transition:all .15s;background:#fff;user-select:none}
+.brand-check:hover{border-color:#9E9B93}
+.brand-check.sel{border-color:var(--bc);background:var(--bb)}
+.brand-check input{display:none}
+.brand-emoji{font-size:16px}
+.section{margin-top:1.5rem}
+.section-title{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#9E9B93;font-weight:600;margin-bottom:.75rem}
+.log{background:#1A1916;color:#A8D5BC;border-radius:8px;padding:.875rem 1rem;font-family:'DM Mono',monospace;font-size:12px;line-height:1.8;min-height:80px;max-height:280px;overflow-y:auto;white-space:pre-wrap}
+.log .err{color:#F0B9B4}
+.log .ok{color:#A8D5BC}
+.log .info{color:#A3CDE8}
+.log .warn{color:#F6D860}
+.progress{height:5px;background:#E4E2DC;border-radius:3px;overflow:hidden;margin:.5rem 0}
+.progress-fill{height:100%;background:#2D6A4F;border-radius:3px;transition:width .3s;width:0%}
+.file-zone{border:2px dashed #E4E2DC;border-radius:8px;padding:1.5rem;text-align:center;cursor:pointer;transition:all .15s;background:#FAFAF8}
+.file-zone:hover,.file-zone.drag{border-color:#2D6A4F;background:#EAF3EE}
+.file-zone p{font-size:13px;color:#9E9B93;margin-top:.5rem}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:500}
+.badge.ok{background:#EAF3EE;color:#2D6A4F}
+.badge.warn{background:#FEF3CD;color:#B7791F}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:1rem}
+.stat{text-align:center;padding:.5rem;background:#F7F6F3;border-radius:6px}
+.stat-n{font-size:20px;font-weight:700;color:#1A1916}
+.stat-l{font-size:10.5px;color:#9E9B93;margin-top:1px}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid #E4E2DC;border-top-color:#1A1916;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.notif{position:fixed;bottom:1.5rem;right:1.5rem;background:#1A1916;color:#fff;padding:.6rem 1rem;border-radius:8px;font-size:13px;display:flex;align-items:center;gap:8px;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none;z-index:100}
+.notif.show{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a href="/" class="back"><i class="ti ti-arrow-left"></i> Wróć</a>
+    <div>
+      <h1>Eksport / Import wiedzy <span>backup mózgu agenta</span></h1>
+    </div>
+  </div>
+
+  <!-- EKSPORT -->
+  <div class="card">
+    <div style="display:flex;align-items:flex-start;gap:1rem">
+      <div class="card-icon" style="background:#EAF3EE;color:#2D6A4F;flex-shrink:0"><i class="ti ti-database-export"></i></div>
+      <div style="flex:1">
+        <h2>Eksportuj wiedzę agenta</h2>
+        <p>Pobierz plik JSON ze wszystkim czego agent się nauczył — baza wiedzy, profil nauki, feedbacki, eventy i historia dla każdej marki. Zapisz go przed większymi zmianami w projekcie.</p>
+      </div>
+    </div>
+
+    <div class="section-title">Wybierz marki do eksportu</div>
+    <div class="brands-grid" id="export-brands">
+      <label class="brand-check sel" style="--bc:#7B5EA7;--bb:#F3EEFB" data-brand="bdb">
+        <input type="checkbox" value="bdb" checked>
+        <span class="brand-emoji">🎪</span><span>bdb event</span>
+      </label>
+      <label class="brand-check sel" style="--bc:#2176AE;--bb:#EAF4FB" data-brand="zimowa">
+        <input type="checkbox" value="zimowa" checked>
+        <span class="brand-emoji">❄️</span><span>Zimowa Akademia</span>
+      </label>
+      <label class="brand-check sel" style="--bc:#D4580A;--bb:#FEF0E8" data-brand="3x3">
+        <input type="checkbox" value="3x3" checked>
+        <span class="brand-emoji">🏀</span><span>3x3 Koszykówka</span>
+      </label>
+      <label class="brand-check sel" style="--bc:#0F766E;--bb:#CCFBF1" data-brand="adam">
+        <input type="checkbox" value="adam" checked>
+        <span class="brand-emoji">🎯</span><span>Adam</span>
+      </label>
+      <label class="brand-check sel" style="--bc:#B45309;--bb:#FEF3C7" data-brand="czyzby">
+        <input type="checkbox" value="czyzby" checked>
+        <span class="brand-emoji">✈️</span><span>CzyzbYPodróż</span>
+      </label>
+      <label class="brand-check sel" style="--bc:#1D4ED8;--bb:#DBEAFE" data-brand="nest">
+        <input type="checkbox" value="nest" checked>
+        <span class="brand-emoji">🏡</span><span>Nest</span>
+      </label>
+    </div>
+
+    <div class="section-title">Co eksportować</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1rem">
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox" id="exp-kb" checked> Baza wiedzy (KB)</label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox" id="exp-learn" checked> Profil nauki agenta</label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox" id="exp-feedbacks" checked> Feedbacki</label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox" id="exp-events" checked> Eventy</label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox" id="exp-history"> Historia postów</label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox" id="exp-goals" checked> Cele kampanii</label>
+    </div>
+
+    <div id="export-stats" class="stats" style="display:none">
+      <div class="stat"><div class="stat-n" id="es-brands">0</div><div class="stat-l">marek</div></div>
+      <div class="stat"><div class="stat-n" id="es-keys">0</div><div class="stat-l">kluczy danych</div></div>
+      <div class="stat"><div class="stat-n" id="es-size">0</div><div class="stat-l">KB</div></div>
+    </div>
+
+    <div class="progress" id="exp-progress" style="display:none"><div class="progress-fill" id="exp-fill"></div></div>
+    <div class="log" id="exp-log" style="display:none"></div>
+
+    <div style="display:flex;gap:8px;margin-top:1rem;flex-wrap:wrap">
+      <button class="btn pr" id="exp-btn" onclick="doExport()"><i class="ti ti-download"></i> Eksportuj i pobierz</button>
+      <span id="exp-ok" style="display:none;font-size:12.5px;color:#2D6A4F;align-items:center;gap:5px"><i class="ti ti-check"></i> Plik pobrany!</span>
+    </div>
+  </div>
+
+  <!-- IMPORT -->
+  <div class="card" style="margin-top:1rem">
+    <div style="display:flex;align-items:flex-start;gap:1rem">
+      <div class="card-icon" style="background:#EAF4FB;color:#2176AE;flex-shrink:0"><i class="ti ti-database-import"></i></div>
+      <div style="flex:1">
+        <h2>Importuj wiedzę agenta</h2>
+        <p>Wgraj wcześniej pobrany plik JSON. Agent odzyska całą zapisaną wiedzę — idealne po wdrożeniu nowej wersji aplikacji. <strong>Istniejące dane zostaną nadpisane.</strong></p>
+      </div>
+    </div>
+
+    <div class="file-zone" id="drop-zone"
+      ondragover="onDragOver(event)"
+      ondragleave="onDragLeave(event)"
+      ondrop="onDrop(event)"
+      onclick="document.getElementById('file-input').click()">
+      <i class="ti ti-file-upload" style="font-size:28px;color:#9E9B93"></i>
+      <p>Przeciągnij plik <strong>social-ai-wiedza-*.json</strong><br>lub kliknij aby wybrać</p>
+      <input type="file" id="file-input" accept=".json" style="display:none" onchange="onFileSelect(event)">
+    </div>
+
+    <div id="import-preview" style="display:none;margin-top:.875rem">
+      <div class="section-title">Podgląd pliku</div>
+      <div id="import-summary" style="background:#F7F6F3;border-radius:6px;padding:.75rem;font-size:13px;line-height:1.8;margin-bottom:.75rem"></div>
+      <div style="background:#FEF3CD;border:1px solid #F6D860;border-radius:6px;padding:.6rem .875rem;font-size:12.5px;color:#B7791F;margin-bottom:.875rem">
+        <i class="ti ti-alert-triangle"></i> <strong>Uwaga:</strong> import nadpisze istniejące dane w bazie. Zrób eksport przed importem jeśli chcesz zachować aktualne dane.
+      </div>
+      <div class="progress" id="imp-progress" style="display:none"><div class="progress-fill" id="imp-fill"></div></div>
+      <div class="log" id="imp-log" style="display:none"></div>
+      <div style="display:flex;gap:8px;margin-top:.75rem;flex-wrap:wrap">
+        <button class="btn green" id="imp-btn" onclick="doImport()"><i class="ti ti-database-import"></i> Importuj dane</button>
+        <button class="btn" onclick="clearImport()">Anuluj</button>
+        <span id="imp-ok" style="display:none;font-size:12.5px;color:#2D6A4F;align-items:center;gap:5px"><i class="ti ti-check"></i> Import zakończony!</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="notif" id="notif"><i class="ti ti-check-circle"></i><span id="notif-txt"></span></div>
+
+<script>
+const API_BASE = window.location.origin;
+let importData = null;
+
+// ── BRAND CHECKBOXES ──────────────────────────────────────────
+document.querySelectorAll('.brand-check').forEach(label => {
+  label.addEventListener('click', () => {
+    const cb = label.querySelector('input');
+    cb.checked = !cb.checked;
+    label.classList.toggle('sel', cb.checked);
+  });
+});
+
+function getSelectedBrands() {
+  return [...document.querySelectorAll('#export-brands input:checked')].map(i => i.value);
+}
+
+function getSelectedTypes() {
+  return {
+    kb:        document.getElementById('exp-kb').checked,
+    learn:     document.getElementById('exp-learn').checked,
+    feedbacks: document.getElementById('exp-feedbacks').checked,
+    events:    document.getElementById('exp-events').checked,
+    history:   document.getElementById('exp-history').checked,
+    goals:     document.getElementById('exp-goals').checked,
+  };
+}
+
+// ── LOGGING ───────────────────────────────────────────────────
+function log(elId, msg, type='info') {
+  const el = document.getElementById(elId);
+  el.style.display = 'block';
+  const cls = {ok:'ok', err:'err', warn:'warn', info:'info'}[type]||'info';
+  el.innerHTML += `<span class="${cls}">${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+function clearLog(elId) {
+  const el = document.getElementById(elId);
+  el.innerHTML = '';
+  el.style.display = 'none';
+}
+
+function showNotif(msg) {
+  const n = document.getElementById('notif');
+  document.getElementById('notif-txt').textContent = msg;
+  n.classList.add('show');
+  clearTimeout(window._nt);
+  window._nt = setTimeout(() => n.classList.remove('show'), 2500);
+}
+
+// ── EKSPORT ───────────────────────────────────────────────────
+async function doExport() {
+  const brands = getSelectedBrands();
+  const types = getSelectedTypes();
+
+  if (!brands.length) { showNotif('Wybierz minimum jedną markę'); return; }
+
+  const btn = document.getElementById('exp-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Pobieram dane...';
+  clearLog('exp-log');
+  document.getElementById('exp-ok').style.display = 'none';
+  document.getElementById('exp-progress').style.display = 'block';
+  document.getElementById('export-stats').style.display = 'none';
+
+  // Klucze do pobrania per marka
+  const suffixes = [];
+  if (types.kb)        suffixes.push('kb');
+  if (types.learn)     suffixes.push('learn_profile');
+  if (types.feedbacks) suffixes.push('feedbacks');
+  if (types.events)    suffixes.push('events');
+  if (types.history)   suffixes.push('history');
+  if (types.goals)     suffixes.push('goals_custom');
+
+  const allKeys = [];
+  brands.forEach(b => suffixes.forEach(s => allKeys.push(`${b}_${s}`)));
+
+  const exportObj = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    exportedBy: 'Social AI',
+    brands: brands,
+    types: types,
+    data: {}
+  };
+
+  let done = 0;
+  const fill = document.getElementById('exp-fill');
+
+  for (const key of allKeys) {
+    try {
+      const r = await fetch(`${API_BASE}/api/store/${key}`);
+      const d = await r.json();
+      if (d.value !== null && d.value !== undefined) {
+        exportObj.data[key] = d.value;
+        log('exp-log', `✓ ${key}`, 'ok');
+      } else {
+        log('exp-log', `— ${key} (brak danych)`, 'info');
+      }
+    } catch(e) {
+      log('exp-log', `✗ ${key}: ${e.message}`, 'err');
+    }
+    done++;
+    fill.style.width = (done / allKeys.length * 100) + '%';
+  }
+
+  // Statystyki
+  const dataKeys = Object.keys(exportObj.data);
+  const sizeKb = (JSON.stringify(exportObj).length / 1024).toFixed(1);
+  document.getElementById('export-stats').style.display = 'grid';
+  document.getElementById('es-brands').textContent = brands.length;
+  document.getElementById('es-keys').textContent = dataKeys.length;
+  document.getElementById('es-size').textContent = sizeKb;
+
+  if (!dataKeys.length) {
+    log('exp-log', '⚠ Brak danych do eksportu — baza może być pusta', 'warn');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-download"></i> Eksportuj i pobierz';
+    return;
+  }
+
+  // Pobierz plik
+  const date = new Date().toISOString().slice(0,10);
+  const filename = `social-ai-wiedza-${date}.json`;
+  const blob = new Blob([JSON.stringify(exportObj, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+
+  log('exp-log', `\n✅ Gotowe! Pobrano ${dataKeys.length} kluczy (${sizeKb} KB) → ${filename}`, 'ok');
+  document.getElementById('exp-ok').style.display = 'inline-flex';
+  btn.disabled = false;
+  btn.innerHTML = '<i class="ti ti-download"></i> Eksportuj i pobierz';
+  showNotif('✅ Plik pobrany: ' + filename);
+}
+
+// ── IMPORT – DRAG & DROP ──────────────────────────────────────
+function onDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag'); }
+function onDragLeave(e) { document.getElementById('drop-zone').classList.remove('drag'); }
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.json')) loadImportFile(file);
+  else showNotif('Przeciągnij plik .json');
+}
+function onFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) loadImportFile(file);
+}
+
+function loadImportFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      importData = JSON.parse(e.target.result);
+      showImportPreview(file.name);
+    } catch(err) {
+      showNotif('Błąd: nieprawidłowy plik JSON');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function showImportPreview(filename) {
+  if (!importData || !importData.data) {
+    showNotif('Nieprawidłowy format pliku');
+    return;
+  }
+
+  const keys = Object.keys(importData.data);
+  const brands = [...new Set(keys.map(k => k.split('_')[0]))];
+  const date = importData.exportedAt ? new Date(importData.exportedAt).toLocaleString('pl-PL') : '—';
+  const sizeKb = (JSON.stringify(importData).length / 1024).toFixed(1);
+
+  // Zlicz typy danych
+  const counts = {};
+  keys.forEach(k => {
+    const suffix = k.split('_').slice(1).join('_');
+    counts[suffix] = (counts[suffix]||0) + 1;
+  });
+
+  const typeLabels = {
+    'kb': 'baz wiedzy', 'learn_profile': 'profili nauki',
+    'feedbacks': 'zestawów feedbacków', 'events': 'baz eventów',
+    'history': 'historii', 'goals_custom': 'celów kampanii'
+  };
+
+  let summary = `<strong>Plik:</strong> ${filename}<br>`;
+  summary += `<strong>Data eksportu:</strong> ${date}<br>`;
+  summary += `<strong>Marki:</strong> ${brands.join(', ')}<br>`;
+  summary += `<strong>Klucze:</strong> ${keys.length} (${sizeKb} KB)<br>`;
+  summary += `<strong>Zawartość:</strong> `;
+  summary += Object.entries(counts).map(([k,v]) => `${v} ${typeLabels[k]||k}`).join(', ');
+
+  document.getElementById('import-summary').innerHTML = summary;
+  document.getElementById('import-preview').style.display = 'block';
+  clearLog('imp-log');
+  document.getElementById('imp-ok').style.display = 'none';
+}
+
+async function doImport() {
+  if (!importData || !importData.data) return;
+
+  const btn = document.getElementById('imp-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Importuję...';
+  clearLog('imp-log');
+  document.getElementById('imp-ok').style.display = 'none';
+  document.getElementById('imp-progress').style.display = 'block';
+
+  const keys = Object.keys(importData.data);
+  const fill = document.getElementById('imp-fill');
+  let done = 0, ok = 0, err = 0;
+
+  for (const key of keys) {
+    try {
+      const r = await fetch(`${API_BASE}/api/store`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({key, value: importData.data[key]})
+      });
+      if (r.ok) {
+        log('imp-log', `✓ ${key}`, 'ok');
+        ok++;
+      } else {
+        const err_d = await r.json().catch(()=>({}));
+        log('imp-log', `✗ ${key}: ${err_d.detail||r.status}`, 'err');
+        err++;
+      }
+    } catch(e) {
+      log('imp-log', `✗ ${key}: ${e.message}`, 'err');
+      err++;
+    }
+    done++;
+    fill.style.width = (done / keys.length * 100) + '%';
+  }
+
+  log('imp-log', `\n${err ? '⚠' : '✅'} Zakończono: ${ok}/${keys.length} kluczy wgranych${err?' · '+err+' błędów':''}`, err?'warn':'ok');
+
+  document.getElementById('imp-ok').style.display = 'inline-flex';
+  btn.disabled = false;
+  btn.innerHTML = '<i class="ti ti-database-import"></i> Importuj dane';
+  showNotif(err ? `Import z błędami: ${ok}/${keys.length}` : `✅ Zaimportowano ${ok} kluczy!`);
+}
+
+function clearImport() {
+  importData = null;
+  document.getElementById('import-preview').style.display = 'none';
+  document.getElementById('file-input').value = '';
+  clearLog('imp-log');
+}
+</script>
+</body>
+</html>
