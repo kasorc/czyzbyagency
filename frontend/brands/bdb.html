@@ -356,6 +356,7 @@ textarea:focus{border-color:var(--accent)}
           <button class="btn pr" id="gen-btn" onclick="genPost()" style="font-size:13px;padding:8px 18px"><i class="ti ti-sparkles"></i> Generuj</button>
           <button class="btn" id="quick-btn" onclick="quickGen()" style="background:var(--accent-light);color:var(--accent);border-color:var(--accent-border)"><i class="ti ti-bolt"></i> Szybki</button>
           <button class="btn" onclick="clearGen()"><i class="ti ti-x"></i></button>
+        <span id="dna-badge" style="display:none;align-items:center;gap:4px;font-size:11px;background:var(--accent-light);color:var(--accent);border-radius:4px;padding:2px 8px;font-weight:500"></span>
         </div>
       </div>
       <!-- TRYB ZDJĘCIA -->
@@ -519,7 +520,16 @@ textarea:focus{border-color:var(--accent)}
       <div class="mc"><div class="mv" id="st-a">–</div><div class="ml">Średnia ocena</div></div>
       <div class="mc"><div class="mv" id="st-f">0</div><div class="ml">Feedbacków</div></div>
     </div>
-    <div class="card"><div class="card-title"><i class="ti ti-history"></i> Historia postów</div><div id="hist-list"><div class="es">Brak historii.</div></div></div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;gap:8px;flex-wrap:wrap">
+        <div class="card-title" style="margin:0"><i class="ti ti-history"></i> Historia postów</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" id="hist-search" placeholder="🔍 Szukaj..." oninput="renderHist()" style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12.5px;width:150px;background:var(--bg);font-family:'DM Sans',sans-serif">
+          <button class="btn" onclick="exportHistCSV()" title="Eksportuj historię do CSV"><i class="ti ti-table-export"></i> CSV</button>
+        </div>
+      </div>
+      <div id="hist-list"><div class="es">Brak historii.</div></div>
+    </div>
   </div>
 </div><!-- /main -->
 </div><!-- /flex -->
@@ -633,7 +643,7 @@ async function initDataFromServer(){
       else if(map[k])DATA[map[k]]=val;
     }
   }
-  updateStats();refreshEvSel();updateLearnWidget();renderDashboard();
+  updateStats();refreshEvSel();loadLastEvent();checkUpcomingEvents();updateLearnWidget();updateDNAbadge();if(curView==='dash')renderDashboard();
 }
 
 function save(key){
@@ -731,12 +741,38 @@ function addEvent(){
   document.getElementById('ev-name').value='';document.getElementById('ev-date').value='';document.getElementById('ev-loc').value='';document.getElementById('ev-desc').value='';
   showNotif('Event zapisany!');
 }
+function genFromEvent(id){
+  selEv(id);
+  selView('gen',document.getElementById('nav-gen'));
+  showNotif('Event wybrany – wygeneruj post!');
+}
+
 function delEvent(id){DATA.events=DATA.events.filter(e=>e.id!==id);save('events');renderEvList();refreshEvSel();}
 function renderEvList(){
   const list=document.getElementById('ev-list');
   if(!DATA.events.length){list.innerHTML='<div class="es">Brak eventów.</div>';return;}
-  list.innerHTML=DATA.events.map(e=>{const d=e.date?daysTo(e.date):null;const dStr=e.date?new Date(e.date+'T00:00:00').toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'}):'';
-    return`<div class="ev-pill"><div style="flex:1"><div class="ep-n">${e.name}</div><div class="ep-d">${dStr?dStr+' · ':''}${e.loc||''}${d!==null?' · '+cntBadge(d):''}</div>${e.desc?`<div style="font-size:11.5px;color:var(--text-3);margin-top:3px">${e.desc.substring(0,80)}${e.desc.length>80?'...':''}</div>`:''}</div><button class="ep-del" onclick="delEvent(${e.id})"><i class="ti ti-trash"></i></button></div>`;}).join('');
+  list.innerHTML=DATA.events.map(e=>{
+    const d=e.date?daysTo(e.date):null;
+    const dStr=e.date?new Date(e.date+'T00:00:00').toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'}):'';
+    let daysBadge='';
+    if(d!==null){
+      if(d<0)daysBadge=`<span style="background:#FCECEA;color:var(--danger);border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600">zakończony</span>`;
+      else if(d===0)daysBadge=`<span style="background:var(--accent-light);color:var(--accent);border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600">dziś!</span>`;
+      else if(d<=3)daysBadge=`<span style="background:#FEF3CD;color:#B7791F;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600">za ${d} dni ⚡</span>`;
+      else if(d<=7)daysBadge=`<span style="background:var(--info-light);color:var(--info);border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600">za ${d} dni</span>`;
+      else daysBadge=`<span style="background:var(--bg);color:var(--text-3);border-radius:4px;padding:2px 7px;font-size:11px;border:1px solid var(--border)">za ${d} dni</span>`;
+    }
+    return`<div class="ev-pill" style="cursor:pointer" onclick="selEv(${e.id})" title="Kliknij aby wybrać event do generatora">
+      <div style="flex:1">
+        <div class="ep-n" style="display:flex;align-items:center;gap:8px">${e.name}${daysBadge}</div>
+        <div class="ep-d">${dStr?dStr+' · ':''}${e.loc||''}${e.desc?` · ${e.desc.substring(0,60)}${e.desc.length>60?'...':''}`:''}</div>
+      </div>
+      <div style="display:flex;gap:5px;flex-shrink:0">
+        <button class="btn" onclick="event.stopPropagation();genFromEvent(${e.id})" style="padding:3px 8px;font-size:11px" title="Generuj post"><i class="ti ti-wand"></i></button>
+        <button class="ep-del" onclick="event.stopPropagation();delEvent(${e.id})"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>`;
+  }).join('');
 }
 function refreshEvSel(){
   const sel=document.getElementById('ev-sel');sel.innerHTML='<option value="">— brak / wpisz temat ręcznie —</option>';
@@ -752,6 +788,7 @@ function onEvSel(){
   prev.style.display='block';prev.innerHTML=`<strong>${ev.name}</strong>${dStr?' · '+dStr:''}${ev.loc?' · '+ev.loc:''}${ev.desc?`<br><span style="font-size:11.5px">${ev.desc}</span>`:''}`;
   const days=ev.date?daysTo(ev.date):null;
   if(days!==null){cntRow.style.display='block';cntRow.innerHTML=cntBadge(days);}else cntRow.style.display='none';
+  saveLastEvent(id);
 }
 
 // ─── GENERATOR ───────────────────────────────────────────────
@@ -839,7 +876,7 @@ function renderGenResult(){
     const b=document.createElement('button');b.className='tab'+(k===first?' on':'');b.innerHTML=`${icons[k]} ${labels[k]}`;b.onclick=()=>swPlat(k,b);tabs.appendChild(b);
     const w=document.createElement('div');w.id='p-'+k;w.className='pc'+(k===first?' on':'');
     const box=document.createElement('div');box.className='rbox';box.id='r-'+k;box.textContent=genData[k];if(k==='blog')box.style.minHeight='200px';
-    const cpBtn=document.createElement('button');cpBtn.className='copy-btn-inline';cpBtn.innerHTML='<i class="ti ti-copy"></i> Kopiuj';cpBtn.onclick=()=>{navigator.clipboard.writeText(genData[k]);showNotif('Skopiowano!');};
+    const cpBtn=document.createElement('button');cpBtn.className='copy-btn-inline';cpBtn.innerHTML='<i class="ti ti-copy"></i> Kopiuj';cpBtn.onclick=()=>{const txt=genData[k];const ok=()=>{cpBtn.innerHTML='<i class="ti ti-check"></i> Skopiowano!';cpBtn.style.cssText='background:var(--accent-light);color:var(--accent);border-color:var(--accent-border);opacity:1';setTimeout(()=>{cpBtn.innerHTML='<i class="ti ti-copy"></i> Kopiuj';cpBtn.style.cssText='';},2000);};navigator.clipboard.writeText(txt).then(ok).catch(()=>{try{const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);ok();}catch(e){showNotif('Kopiowanie nieudane');}});};if('Skopiowano!');};
     box.appendChild(cpBtn);w.appendChild(box);
     if(k==='instagram'){const h=document.createElement('div');h.className='htags';h.textContent=(DATA.kb?.keywords?.hashtags||BRAND.kb.keywords?.hashtags||'').replace(/,\s*/g,' ');w.appendChild(h);}
     cont.appendChild(w);
@@ -1083,7 +1120,10 @@ function updateStats(){
 function renderHist(){
   const list=document.getElementById('hist-list');
   if(!DATA.postHistory.length){list.innerHTML='<div class="es">Brak historii.</div>';return;}
-  list.innerHTML=DATA.postHistory.slice(0,30).map(p=>{
+  const q=(document.getElementById('hist-search')?.value||'').toLowerCase().trim();
+  const filtered=q?DATA.postHistory.filter(p=>(p.text||'').toLowerCase().includes(q)||(p.eventName||'').toLowerCase().includes(q)||(p.goal||'').toLowerCase().includes(q)):DATA.postHistory;
+  if(!filtered.length){list.innerHTML=`<div class="es">Brak wyników dla "<strong>${q}</strong>".</div>`;return;}
+  list.innerHTML=filtered.slice(0,30).map(p=>{
     const stars=p.stars?[1,2,3,4,5].map(i=>`<span style="color:${i<=p.stars?'#F5A623':'var(--border)'}">★</span>`).join(''):'<span style="font-size:12px;color:var(--text-3)">Brak oceny</span>';
     return`<div class="hi"><div class="hh">${p.isBlog?'<span style="font-size:11px;color:var(--text-3)">Blog</span>':''}${p.eventName?`<span style="font-size:11.5px;color:var(--info)"><i class="ti ti-calendar"></i> ${p.eventName}</span>`:''}<span style="margin-left:auto;font-size:11.5px;color:var(--text-3)">${p.date}</span></div><div style="font-size:11.5px;color:var(--text-3);margin-bottom:4px">${p.goal}</div><div style="color:var(--text-2);font-size:13px;line-height:1.6;margin-bottom:5px">${p.text.substring(0,160)}${p.text.length>160?'…':''}</div><div style="display:flex;align-items:center;gap:8px;font-size:14px">${stars}${p.tags&&p.tags.length?'<span style="font-size:11.5px;color:var(--text-3)">'+p.tags.join(', ')+'</span>':''}</div>${p.note?`<div style="font-size:12px;color:var(--text-3);margin-top:3px;font-style:italic">"${p.note}"</div>`:''}</div>`;
   }).join('');
@@ -1178,6 +1218,50 @@ async function genPostFromImage(){
 function openSb(){document.getElementById('main-sb').classList.add('open');document.getElementById('sb-overlay').classList.add('open');}
 function closeSb(){document.getElementById('main-sb').classList.remove('open');document.getElementById('sb-overlay').classList.remove('open');}
 function restoreLastSettings(){const last=lsGet(PREFIX+'last',null);if(!last)return;const gs=document.getElementById('goal-sel');if(gs&&last.goal&&GOALS[last.goal])gs.value=last.goal;const fs=document.getElementById('fmt-sel');if(fs&&last.fmt)fs.value=last.fmt;if(last.fmt==='blog'){isBlog=true;document.getElementById('soc-opts').style.display='none';document.getElementById('blog-opts').style.display='block';}}
+
+// ─── CSV EXPORT ──────────────────────────────────────────────
+function exportHistCSV(){
+  if(!DATA.postHistory.length){showNotif('Brak historii do eksportu');return;}
+  const rows=[['Data','Marka','Event','Cel','Typ','Ocena','Tagi','Notatka','Tekst']];
+  DATA.postHistory.forEach(p=>{rows.push([p.date||'',BRAND.name,p.eventName||'',p.goal||'',p.isBlog?'Blog':'Post social',p.stars||'',(p.tags||[]).join('; '),p.note||'',(p.text||'').replace(/"/g,'""').substring(0,500)]);});
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');
+  a.href=url;a.download=`historia-${BRAND.id}-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();URL.revokeObjectURL(url);
+  showNotif(`✅ Pobrano ${DATA.postHistory.length} postów jako CSV`);
+}
+
+// ─── OSTATNI EVENT ───────────────────────────────────────────
+function saveLastEvent(id){lsSet(BRAND.id+'_last_ev',id);}
+function loadLastEvent(){
+  const id=lsGet(BRAND.id+'_last_ev',null);if(!id)return;
+  const sel=document.getElementById('ev-sel');
+  if(sel&&DATA.events.find(e=>e.id===id)){sel.value=id;onEvSel();}
+}
+
+// ─── DNA BADGE ───────────────────────────────────────────────
+function updateDNAbadge(){
+  const badge=document.getElementById('dna-badge');if(!badge)return;
+  const kb=DATA.kb||BRAND.kb;
+  const hasDNA=!!(kb.styleDNA||(kb.styleExamples&&kb.styleExamples.length));
+  const hasProfile=!!(DATA.learnProfile&&DATA.learnProfile.analysis);
+  if(hasDNA||hasProfile){
+    badge.style.display='inline-flex';
+    badge.textContent=hasDNA&&hasProfile?'🧠 DNA + profil nauki aktywne':hasDNA?'🧠 DNA stylu aktywne':'🧠 Profil nauki aktywny';
+  }else{badge.style.display='none';}
+}
+
+// ─── ALERT NADCHODZĄCYCH EVENTÓW ─────────────────────────────
+function checkUpcomingEvents(){
+  const soon=DATA.events.filter(e=>{if(!e.date)return false;const d=daysTo(e.date);return d>=0&&d<=7;}).sort((a,b)=>daysTo(a.date)-daysTo(b.date));
+  const banner=document.getElementById('upcoming-banner');if(!banner)return;
+  if(!soon.length){banner.style.display='none';return;}
+  const ev=soon[0];const d=daysTo(ev.date);
+  const msg=d===0?`Dziś masz event: <strong>${ev.name}</strong>!`:d===1?`Jutro: <strong>${ev.name}</strong>`:`Za ${d} dni: <strong>${ev.name}</strong>`;
+  banner.style.display='flex';
+  banner.innerHTML=`<i class="ti ti-bell-ringing" style="color:var(--warn);flex-shrink:0"></i><span style="flex:1;font-size:13px">${msg} &nbsp;<a href="#" onclick="genFromEvent(${ev.id});return false" style="color:var(--accent);font-weight:600">Wygeneruj post →</a></span><button onclick="this.parentElement.style.display='none'" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:18px;line-height:1">×</button>`;
+}
 
 // ─── INIT ─────────────────────────────────────────────────────
 checkHealth();
